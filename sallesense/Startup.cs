@@ -30,6 +30,7 @@ public class Startup
         // Enregistrement des services
         services.AddScoped<AuthService>();
         services.AddScoped<PhotoService>();
+        services.AddScoped<ReservationService>();
 
         // Services d'authentification
         services.AddScoped<ProtectedSessionStorage>();
