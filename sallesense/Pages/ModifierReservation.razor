@@ -1,8 +1,12 @@
 @page "/reservation/modifier/{Id:int}"
 @using SallseSense.Models
+@using SallseSense.Services
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @attribute [Authorize]
 @inject NavigationManager NavigationManager
+@inject ReservationService ReservationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <div class="container mt-4">
     <div class="row justify-content-center">
@@ -248,6 +252,7 @@
     [Parameter]
     public int Id { get; set; }
 
+    private int currentUserId;
     private Reservation? reservation;
     private Reservation? reservationOriginale;
     private SalleViewModel? salleInfo;
@@ -268,26 +273,46 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // TODO: Backend - Charger la réservation depuis la base de données
-        LoadMockData();
-        ChargerReservations();
+        // Récupérer l'utilisateur connecté
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userIdClaim = user.FindFirst("UserId");
+            if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+            {
+                currentUserId = userId;
+            }
+        }
+
+        // Charger la réservation depuis la base de données
+        await LoadReservationAsync();
+        await ChargerReservationsAsync();
     }
 
-    private void LoadMockData()
+    private async Task LoadReservationAsync()
     {
-        reservation = new Reservation
-        {
-            IdReservationPk = Id,
-            NoSalle = 1,
-            HeureDebut = DateTime.Today.AddDays(1).AddHours(9),
-            HeureFin = DateTime.Today.AddDays(1).AddHours(11),
-            NombrePersonne = 25,
-            NoPersonne = 1
-        };
+        reservation = await ReservationService.GetReservationByIdAsync(Id);
 
+        if (reservation == null)
+        {
+            errorMessage = "Réservation introuvable.";
+            return;
+        }
+
+        // Vérifier que l'utilisateur est le propriétaire
+        if (reservation.NoPersonne != currentUserId)
+        {
+            errorMessage = "Vous n'êtes pas autorisé à modifier cette réservation.";
+            reservation = null;
+            return;
+        }
+
+        // Copie originale pour comparaison
         reservationOriginale = new Reservation
         {
-            IdReservationPk = Id,
+            IdReservationPk = reservation.IdReservationPk,
             NoSalle = reservation.NoSalle,
             HeureDebut = reservation.HeureDebut,
             HeureFin = reservation.HeureFin,
@@ -295,7 +320,8 @@
             NoPersonne = reservation.NoPersonne
         };
 
-        salleInfo = new SalleViewModel { IdSallePk = 1, Numero = "A-101", CapaciteMaximale = 30 };
+        // Charger les informations de la salle depuis EF Core
+        await LoadSalleInfoAsync(reservation.NoSalle);
 
         dateReservation = reservation.HeureDebut.Date;
         heureDebut = TimeOnly.FromDateTime(reservation.HeureDebut);
@@ -304,19 +330,44 @@
         reservationSelectionneeId = Id;
     }
 
-    private void ChargerReservations()
+    private async Task LoadSalleInfoAsync(int idSalle)
     {
-        // TODO: Backend - Charger toutes les réservations de l'utilisateur pour cette salle
-        toutesReservations = new List<Reservation>
-        {
-            reservation!,
-            new Reservation { IdReservationPk = 99, NoSalle = 1, HeureDebut = DateTime.Today.AddDays(2).AddHours(14), HeureFin = DateTime.Today.AddDays(2).AddHours(16), NombrePersonne = 20 }
-        };
+        var salle = await ReservationService.GetSalleByIdAsync(idSalle);
 
-        autresReservations = new List<Reservation>
+        if (salle != null)
         {
-            new Reservation { HeureDebut = DateTime.Today.AddDays(3).AddHours(10), HeureFin = DateTime.Today.AddDays(3).AddHours(12), NombrePersonne = 15 }
-        };
+            salleInfo = new SalleViewModel
+            {
+                IdSallePk = salle.IdSallePk,
+                Numero = salle.Numero,
+                CapaciteMaximale = salle.CapaciteMaximale
+            };
+        }
+    }
+
+    private async Task ChargerReservationsAsync()
+    {
+        if (reservation == null) return;
+
+        // Charger toutes les réservations futures de l'utilisateur pour cette salle
+        var toutesLesReservations = await ReservationService.GetReservationsByUserAsync(currentUserId, futuresOnly: true);
+        toutesReservations = toutesLesReservations
+            .Where(r => r.NoSalle == reservation.NoSalle)
+            .OrderBy(r => r.HeureDebut)
+            .ToList();
+
+        // Charger les autres réservations de la salle (pas de cet utilisateur)
+        var dateDebut = DateTime.Now;
+        var dateFin = DateTime.Now.AddMonths(1);
+        var toutesReservationsSalle = await ReservationService.GetReservationsBySalleAsync(
+            reservation.NoSalle,
+            dateDebut,
+            dateFin);
+
+        autresReservations = toutesReservationsSalle
+            .Where(r => r.NoPersonne != currentUserId && r.HeureDebut > DateTime.Now)
+            .OrderBy(r => r.HeureDebut)
+            .ToList();
     }
 
     private void OnReservationChanged()
@@ -358,24 +409,34 @@
 
         if (dateReservation.HasValue && heureDebut.HasValue && heureFin.HasValue && reservation != null)
         {
-            reservation.HeureDebut = dateReservation.Value.Add(heureDebut.Value.ToTimeSpan());
-            reservation.HeureFin = dateReservation.Value.Add(heureFin.Value.ToTimeSpan());
+            var nouvelleHeureDebut = dateReservation.Value.Add(heureDebut.Value.ToTimeSpan());
+            var nouvelleHeureFin = dateReservation.Value.Add(heureFin.Value.ToTimeSpan());
 
-            if (reservation.HeureFin <= reservation.HeureDebut)
+            if (nouvelleHeureFin <= nouvelleHeureDebut)
             {
                 errorMessage = "L'heure de fin doit être après l'heure de début.";
                 return;
             }
 
-            // TODO: Backend - Mettre à jour la réservation
-            // - Vérifier que la réservation appartient à l'utilisateur
-            // - Vérifier la disponibilité (trigger trg_pasDeChevauchement)
-            // - Vérifier la capacité
-            // - Mettre à jour dans la base de données
+            // Modifier la réservation via le service
+            var (success, message) = await ReservationService.ModifierReservationAsync(
+                reservation.IdReservationPk,
+                currentUserId,
+                nouvelleHeureDebut,
+                nouvelleHeureFin,
+                reservation.NombrePersonne
+            );
 
-            successMessage = "Réservation modifiée avec succès! Redirection...";
-            await Task.Delay(2000);
-            NavigationManager.NavigateTo("/dashboard");
+            if (success)
+            {
+                successMessage = message + " Redirection...";
+                await Task.Delay(2000);
+                NavigationManager.NavigateTo("/dashboard");
+            }
+            else
+            {
+                errorMessage = message;
+            }
         }
     }
 
@@ -386,14 +447,26 @@
 
     private async Task AnnulerReservation()
     {
-        // TODO: Backend - Supprimer la réservation
-        // - Vérifier que la réservation appartient à l'utilisateur
-        // - Supprimer de la base de données
+        if (reservation == null) return;
+
+        // Annuler la réservation via le service
+        var (success, message) = await ReservationService.AnnulerReservationAsync(
+            reservation.IdReservationPk,
+            currentUserId
+        );
 
         afficherModalAnnulation = false;
-        successMessage = "Réservation annulée avec succès! Redirection...";
-        await Task.Delay(2000);
-        NavigationManager.NavigateTo("/dashboard");
+
+        if (success)
+        {
+            successMessage = message + " Redirection...";
+            await Task.Delay(2000);
+            NavigationManager.NavigateTo("/dashboard");
+        }
+        else
+        {
+            errorMessage = message;
+        }
     }
 
     public class SalleViewModel
