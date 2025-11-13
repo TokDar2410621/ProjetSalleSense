@@ -54,7 +54,7 @@
                                     <div class="col-md-12">
                                         <label class="form-label">Réservation actuelle</label>
                                         <div class="input-group">
-                                            <select class="form-select" @bind="reservationSelectionneeId" @bind:event="onchange">
+                                            <select class="form-select" value="@reservationSelectionneeId" @onchange="OnReservationChanged">
                                                 @foreach (var res in toutesReservations)
                                                 {
                                                     <option value="@res.IdReservationPk">
@@ -62,7 +62,7 @@
                                                     </option>
                                                 }
                                             </select>
-                                            <button type="button" class="btn btn-outline-secondary" @onclick="ChargerReservations">
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="ChargerReservationsAsync">
                                                 <span class="oi oi-reload"></span>
                                             </button>
                                         </div>
@@ -72,11 +72,11 @@
                                 <div class="row mb-3">
                                     <div class="col-md-6">
                                         <label for="date" class="form-label">Date *</label>
-                                        <input type="date" id="date" class="form-control" @bind="dateReservation" @bind:event="onchange" />
+                                        <input type="date" id="date" class="form-control" value="@dateReservation?.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" />
                                     </div>
                                     <div class="col-md-6">
                                         <label for="nombrePersonnes" class="form-label">Nombre de personnes *</label>
-                                        <input type="number" id="nombrePersonnes" class="form-control" @bind="reservation.NombrePersonne" @bind:event="onchange" min="1" />
+                                        <input type="number" id="nombrePersonnes" class="form-control" value="@reservation.NombrePersonne" @onchange="OnNombrePersonnesChanged" min="1" />
                                         <ValidationMessage For="@(() => reservation.NombrePersonne)" />
                                     </div>
                                 </div>
@@ -84,11 +84,11 @@
                                 <div class="row mb-3">
                                     <div class="col-md-6">
                                         <label for="heureDebut" class="form-label">Heure début *</label>
-                                        <input type="time" id="heureDebut" class="form-control" @bind="heureDebut" />
+                                        <input type="time" id="heureDebut" class="form-control" value="@heureDebut?.ToString("HH:mm")" @onchange="OnHeureDebutChanged" />
                                     </div>
                                     <div class="col-md-6">
                                         <label for="heureFin" class="form-label">Heure fin *</label>
-                                        <input type="time" id="heureFin" class="form-control" @bind="heureFin" />
+                                        <input type="time" id="heureFin" class="form-control" value="@heureFin?.ToString("HH:mm")" @onchange="OnHeureFinChanged" />
                                     </div>
                                 </div>
                             </div>
@@ -370,12 +370,48 @@
             .ToList();
     }
 
-    private void OnReservationChanged()
+    private void OnReservationChanged(ChangeEventArgs e)
     {
-        var selected = toutesReservations.FirstOrDefault(r => r.IdReservationPk == reservationSelectionneeId);
-        if (selected != null)
+        if (e.Value != null && int.TryParse(e.Value.ToString(), out int selectedId))
         {
+            reservationSelectionneeId = selectedId;
             NavigationManager.NavigateTo($"/reservation/modifier/{reservationSelectionneeId}");
+        }
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && DateTime.TryParse(e.Value.ToString(), out DateTime newDate))
+        {
+            dateReservation = newDate;
+            await VerifierDisponibilite();
+        }
+    }
+
+    private void OnNombrePersonnesChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && int.TryParse(e.Value.ToString(), out int newNombre))
+        {
+            reservation.NombrePersonne = newNombre;
+            VerifierCapacite();
+        }
+    }
+
+    private async Task OnHeureDebutChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && TimeOnly.TryParse(e.Value.ToString(), out TimeOnly newHeure))
+        {
+            heureDebut = newHeure;
+            await VerifierDisponibilite();
+        }
+    }
+
+    private async Task OnHeureFinChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && TimeOnly.TryParse(e.Value.ToString(), out TimeOnly newHeure))
+        {
+            heureFin = newHeure;
+            await VerifierDisponibilite();
         }
     }
 
@@ -387,10 +423,33 @@
         }
     }
 
-    private void VerifierDisponibilite()
+    private async Task VerifierDisponibilite()
     {
-        // TODO: Backend - Vérifier la disponibilité via trigger trg_pasDeChevauchement
         salleNonDisponible = false;
+
+        if (reservation == null || !dateReservation.HasValue || !heureDebut.HasValue || !heureFin.HasValue)
+            return;
+
+        var nouvelleHeureDebut = dateReservation.Value.Add(heureDebut.Value.ToTimeSpan());
+        var nouvelleHeureFin = dateReservation.Value.Add(heureFin.Value.ToTimeSpan());
+
+        if (nouvelleHeureFin <= nouvelleHeureDebut)
+            return;
+
+        // Vérifier si la salle est disponible pour cette nouvelle période
+        var dateDebut = dateReservation.Value.Date;
+        var dateFin = dateReservation.Value.Date.AddDays(1);
+        var reservationsSalle = await ReservationService.GetReservationsBySalleAsync(
+            reservation.NoSalle,
+            dateDebut,
+            dateFin);
+
+        // Vérifier les chevauchements (sauf avec la réservation actuelle)
+        salleNonDisponible = reservationsSalle
+            .Where(r => r.IdReservationPk != reservation.IdReservationPk)
+            .Any(r => (nouvelleHeureDebut >= r.HeureDebut && nouvelleHeureDebut < r.HeureFin)
+                   || (nouvelleHeureFin > r.HeureDebut && nouvelleHeureFin <= r.HeureFin)
+                   || (nouvelleHeureDebut <= r.HeureDebut && nouvelleHeureFin >= r.HeureFin));
     }
 
     private bool PeutModifier()

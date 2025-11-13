@@ -109,6 +109,19 @@ namespace SallseSense.Services
             catch (SqlException ex)
             {
                 _logger.LogError(ex, "Erreur SQL lors de la création de réservation pour utilisateur {IdUtilisateur}", idUtilisateur);
+
+                // Vérifier si c'est l'erreur du trigger de chevauchement
+                if (ex.Message.Contains("Chevauchement de réservations"))
+                {
+                    return (false, -1, "Cette salle est déjà réservée pour cette période.");
+                }
+
+                // Vérifier si c'est l'erreur du trigger de blacklist
+                if (ex.Message.Contains("est banni"))
+                {
+                    return (false, -1, ex.Message);
+                }
+
                 return (false, -1, $"Erreur de base de données: {ex.Message}");
             }
             catch (Exception ex)
@@ -371,17 +384,8 @@ namespace SallseSense.Services
                 if (salle != null && nouveauNombrePersonnes > salle.CapaciteMaximale)
                     return (false, $"Le nombre de personnes dépasse la capacité de la salle ({salle.CapaciteMaximale}).");
 
-                // Vérifier les chevauchements (sauf avec elle-même)
-                bool chevauchement = await db.Reservations
-                    .Where(r => r.NoSalle == reservation.NoSalle
-                             && r.IdReservationPk != idReservation
-                             && ((nouvelleHeureDebut >= r.HeureDebut && nouvelleHeureDebut < r.HeureFin)
-                                 || (nouvelleHeureFin > r.HeureDebut && nouvelleHeureFin <= r.HeureFin)
-                                 || (nouvelleHeureDebut <= r.HeureDebut && nouvelleHeureFin >= r.HeureFin)))
-                    .AnyAsync();
-
-                if (chevauchement)
-                    return (false, "Cette salle est déjà réservée pour cette période.");
+                // Note: La vérification des chevauchements est gérée par le trigger trg_pasDeChevauchement
+                // qui lèvera une erreur SQL si un chevauchement est détecté
 
                 // Modifier la réservation
                 reservation.HeureDebut = nouvelleHeureDebut;
@@ -398,6 +402,13 @@ namespace SallseSense.Services
             catch (SqlException ex)
             {
                 _logger.LogError(ex, "Erreur SQL lors de la modification de réservation {IdReservation}", idReservation);
+
+                // Vérifier si c'est l'erreur du trigger de chevauchement
+                if (ex.Message.Contains("Chevauchement de réservations"))
+                {
+                    return (false, "Cette salle est déjà réservée pour cette période.");
+                }
+
                 return (false, $"Erreur de base de données: {ex.Message}");
             }
             catch (Exception ex)
