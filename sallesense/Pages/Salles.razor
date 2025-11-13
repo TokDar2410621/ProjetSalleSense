@@ -1,0 +1,228 @@
+@page "/salles"
+@using SallseSense.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Toutes les détails</h2>
+            <p class="text-muted">Consultez et gérez toutes les salles disponibles</p>
+        </div>
+        <div class="col-auto">
+            <a href="/reservation/creer" class="btn btn-primary">
+                <span class="oi oi-plus"></span> Nouvelle réservation
+            </a>
+        </div>
+    </div>
+
+    <!-- Barre de recherche et filtres -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <span class="oi oi-magnifying-glass"></span>
+                                </span>
+                                <input type="text" class="form-control" @bind="searchText" @bind:event="oninput" placeholder="Rechercher une salle..." />
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" @bind="filtreCapacite">
+                                <option value="0">Toutes capacités</option>
+                                <option value="20">20+ personnes</option>
+                                <option value="30">30+ personnes</option>
+                                <option value="40">40+ personnes</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" @bind="filtreStatut">
+                                <option value="all">Tous statuts</option>
+                                <option value="disponible">Disponibles</option>
+                                <option value="occupee">Occupées</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-secondary w-100" @onclick="ResetFilters">
+                                <span class="oi oi-reload"></span> Réinitialiser
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des salles avec pagination -->
+    <div class="row">
+        <div class="col-12">
+            @if (sallesFiltrees.Any())
+            {
+                <div class="row g-4">
+                    @foreach (var salle in sallesPaginees)
+                    {
+                        <div class="col-md-6 col-lg-4">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-header bg-white">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">Salle @salle.Numero</h5>
+                                        <span class="badge @(salle.EstDisponible ? "bg-success" : "bg-danger")">
+                                            @(salle.EstDisponible ? "Libre" : "Occupée")
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span><strong>Capacité maximale:</strong></span>
+                                            <span>@salle.CapaciteMaximale personnes</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span><strong>Local:</strong></span>
+                                            <span>Bâtiment @salle.Numero.Split('-')[0]</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span><strong>Étage:</strong></span>
+                                            <span>@salle.Numero</span>
+                                        </div>
+                                    </div>
+
+                                    @if (!salle.EstDisponible)
+                                    {
+                                        <div class="alert alert-warning py-2 mb-3">
+                                            <small>
+                                                <strong>Prochaine disponibilité:</strong><br />
+                                                @salle.ProchaineDisponibilite?.ToString("dd/MM/yyyy HH:mm")
+                                            </small>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="card-footer bg-white">
+                                    <div class="d-grid gap-2">
+                                        <a href="/salle/@salle.IdSallePk" class="btn btn-outline-primary btn-sm">
+                                            <span class="oi oi-eye"></span> Voir détails
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Pagination -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination justify-content-center">
+                                <li class="page-item @(pageActuelle == 1 ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => ChangerPage(pageActuelle - 1)">Précédent</button>
+                                </li>
+                                @for (int i = 1; i <= nombrePages; i++)
+                                {
+                                    var pageNum = i;
+                                    <li class="page-item @(pageActuelle == pageNum ? "active" : "")">
+                                        <button class="page-link" @onclick="() => ChangerPage(pageNum)">@pageNum</button>
+                                    </li>
+                                }
+                                <li class="page-item @(pageActuelle == nombrePages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => ChangerPage(pageActuelle + 1)">Suivant</button>
+                                </li>
+                            </ul>
+                        </nav>
+                        <p class="text-center text-muted">
+                            Affichage de @((pageActuelle - 1) * sallesParPage + 1) à @Math.Min(pageActuelle * sallesParPage, sallesFiltrees.Count()) sur @sallesFiltrees.Count() salles
+                        </p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    <h5>Aucune salle trouvée</h5>
+                    <p>Essayez de modifier vos filtres de recherche.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string searchText = string.Empty;
+    private int filtreCapacite = 0;
+    private string filtreStatut = "all";
+
+    private int pageActuelle = 1;
+    private int sallesParPage = 9;
+    private int nombrePages => (int)Math.Ceiling((double)sallesFiltrees.Count() / sallesParPage);
+
+    private List<SalleDetailViewModel> salles = new();
+
+    private IEnumerable<SalleDetailViewModel> sallesFiltrees =>
+        salles.Where(s =>
+            (string.IsNullOrEmpty(searchText) || s.Numero.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+            (filtreCapacite == 0 || s.CapaciteMaximale >= filtreCapacite) &&
+            (filtreStatut == "all" ||
+             (filtreStatut == "disponible" && s.EstDisponible) ||
+             (filtreStatut == "occupee" && !s.EstDisponible))
+        );
+
+    private IEnumerable<SalleDetailViewModel> sallesPaginees =>
+        sallesFiltrees
+            .Skip((pageActuelle - 1) * sallesParPage)
+            .Take(sallesParPage);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Backend - Charger les salles depuis la base de données
+        LoadMockData();
+    }
+
+    private void LoadMockData()
+    {
+        salles = new List<SalleDetailViewModel>();
+
+        for (int i = 1; i <= 25; i++)
+        {
+            var batiment = (char)('A' + (i % 3));
+            var etage = (i % 4) + 1;
+            var numero = i % 10;
+
+            salles.Add(new SalleDetailViewModel
+            {
+                IdSallePk = i,
+                Numero = $"{batiment}-{etage}0{numero}",
+                CapaciteMaximale = 20 + (i % 4) * 10,
+                EstDisponible = i % 3 != 0,
+                ProchaineDisponibilite = i % 3 == 0 ? DateTime.Now.AddHours(2) : null
+            });
+        }
+    }
+
+    private void ResetFilters()
+    {
+        searchText = string.Empty;
+        filtreCapacite = 0;
+        filtreStatut = "all";
+        pageActuelle = 1;
+    }
+
+    private void ChangerPage(int nouvellePage)
+    {
+        if (nouvellePage >= 1 && nouvellePage <= nombrePages)
+        {
+            pageActuelle = nouvellePage;
+        }
+    }
+
+    public class SalleDetailViewModel
+    {
+        public int IdSallePk { get; set; }
+        public string Numero { get; set; } = string.Empty;
+        public int CapaciteMaximale { get; set; }
+        public bool EstDisponible { get; set; }
+        public DateTime? ProchaineDisponibilite { get; set; }
+    }
+}

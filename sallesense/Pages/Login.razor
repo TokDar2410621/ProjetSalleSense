@@ -1,0 +1,108 @@
+@page "/login"
+@using SallseSense.Models
+@using SallseSense.Services
+@using SallseSense.Authentication
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager NavigationManager
+@inject AuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">Se connecter</h3>
+
+                    <EditForm Model="@loginModel" OnValidSubmit="@HandleLoginAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label for="courriel" class="form-label">Courriel</label>
+                            <InputText id="courriel" type="email" class="form-control" @bind-Value="loginModel.Courriel" placeholder="Courriel" />
+                            <ValidationMessage For="@(() => loginModel.Courriel)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="motDePasse" class="form-label">Mot de passe</label>
+                            <InputText id="motDePasse" type="password" class="form-control" @bind-Value="loginModel.MotDePasse" placeholder="Mot de passe" />
+                            <ValidationMessage For="@(() => loginModel.MotDePasse)" />
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="rememberMe" @bind="rememberMe" />
+                            <label class="form-check-label" for="rememberMe">
+                                Se souvenir de moi
+                            </label>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger" role="alert">
+                                @errorMessage
+                            </div>
+                        }
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Connexion</button>
+                        </div>
+                    </EditForm>
+
+                    <div class="text-center mt-3">
+                        <a href="#">Mot de passe oublié ?</a>
+                    </div>
+
+                    <hr class="my-4" />
+
+                    <div class="text-center">
+                        <p>Pas encore de compte ?</p>
+                        <a href="/register" class="btn btn-outline-secondary">Créer un compte</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel loginModel = new LoginModel();
+    private bool rememberMe = false;
+    private string errorMessage = string.Empty;
+
+    private async Task HandleLoginAsync()
+    {
+        errorMessage = string.Empty;
+        if(string.IsNullOrWhiteSpace(loginModel.Courriel) || string.IsNullOrWhiteSpace(loginModel.MotDePasse))
+        {
+            errorMessage = "Veuillez remplir tous les champs.";
+            return;
+        }
+
+        var (success, userId, message) = await AuthService.LoginAsync(loginModel.Courriel, loginModel.MotDePasse);
+
+        if (!success)
+        {
+            errorMessage = message;
+            return;
+        }
+
+        // Connexion réussie - créer la session utilisateur
+        var customAuthStateProvider = (CustomAuthenticationStateProvider)AuthStateProvider;
+        await customAuthStateProvider.UpdateAuthenticationState(new UserSession
+        {
+            UserName = loginModel.Courriel,
+            UserId = userId,
+            Role = "Utilisateur" // Par défaut, tous les utilisateurs ont le rôle "Utilisateur"
+        });
+
+        // Rediriger vers le dashboard
+        NavigationManager.NavigateTo("/dashboard", true);
+    }
+
+    // Model pour le login
+    public class LoginModel
+    {
+        public string Courriel { get; set; } = string.Empty;
+        public string MotDePasse { get; set; } = string.Empty;
+    }
+}

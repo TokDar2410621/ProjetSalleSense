@@ -1,0 +1,50 @@
+﻿@page "/counter"
+
+<title>Counter</title>
+<h3>Compteur</h3>
+
+<p class="lead">Valeur : <strong>@currentCount</strong></p>
+
+<div class="mb-3">
+    <label>Pas :</label>
+    <InputNumber @bind-Value="step" class="form-control" style="max-width:120px;" />
+</div>
+
+<div class="btn-group mb-3" role="group">
+    <button class="btn btn-primary" @onclick="Increment">+ @step</button>
+    <button class="btn btn-secondary" @onclick="Decrement">- @step</button>
+    <button class="btn btn-warning" @onclick="Double">x2</button>
+    <button class="btn btn-danger" @onclick="Reset">Reset</button>
+</div>
+
+<div>
+    <button class="btn btn-outline-primary" @onclick="IncrementAsync">+ async (1s)</button>
+</div>
+<div>
+   <p> les emojis : </p>
+    @for (var i = 0; i < currentCount; i++)
+    {
+        <span class="emoji">👍</span>
+    }
+</div>
+
+@code {
+    private int currentCount = 0;
+    private int step = 1;
+
+    void Increment() => currentCount += step;
+    void Decrement() => currentCount -= step;
+    void Double() => currentCount *= 2;
+    void Reset() { currentCount = 0; step = 1; }
+
+    async Task IncrementAsync()
+    {
+        await Task.Delay(1000);
+        currentCount += step;
+    }
+    async Task ajouterEmoji()
+    {
+        await Task.Delay(1000);
+
+    }
+}

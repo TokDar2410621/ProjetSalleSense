@@ -1,0 +1,405 @@
+@page "/reservation/modifier/{Id:int}"
+@using SallseSense.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject NavigationManager NavigationManager
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            @if (reservation != null)
+            {
+                <!-- En-tête -->
+                <div class="mb-4">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="/dashboard">Accueil</a></li>
+                            <li class="breadcrumb-item"><a href="/mes-reservations">Mes réservations</a></li>
+                            <li class="breadcrumb-item active">Modifier une réservation</li>
+                        </ol>
+                    </nav>
+                    <h2>Modifier une réservation</h2>
+                    <p class="text-muted">Modifiez les détails de votre réservation</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <EditForm Model="@reservation" OnValidSubmit="@HandleSubmit">
+                            <DataAnnotationsValidator />
+
+                            <!-- Informations de la salle (non modifiable) -->
+                            <div class="mb-4">
+                                <h5 class="mb-3">Toutes les réservations</h5>
+                                <div class="alert alert-secondary">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Salle:</strong> @salleInfo?.Numero
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Capacité:</strong> @salleInfo?.CapaciteMaximale personnes
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Détails de la réservation -->
+                            <div class="mb-4">
+                                <h5 class="mb-3">Détails de la réservation</h5>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Réservation actuelle</label>
+                                        <div class="input-group">
+                                            <select class="form-select" @bind="reservationSelectionneeId" @bind:event="onchange">
+                                                @foreach (var res in toutesReservations)
+                                                {
+                                                    <option value="@res.IdReservationPk">
+                                                        @res.HeureDebut.ToString("dd/MM/yyyy HH:mm") - @res.HeureFin.ToString("HH:mm") (@res.NombrePersonne personnes)
+                                                    </option>
+                                                }
+                                            </select>
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="ChargerReservations">
+                                                <span class="oi oi-reload"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="date" class="form-label">Date *</label>
+                                        <input type="date" id="date" class="form-control" @bind="dateReservation" @bind:event="onchange" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="nombrePersonnes" class="form-label">Nombre de personnes *</label>
+                                        <input type="number" id="nombrePersonnes" class="form-control" @bind="reservation.NombrePersonne" @bind:event="onchange" min="1" />
+                                        <ValidationMessage For="@(() => reservation.NombrePersonne)" />
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="heureDebut" class="form-label">Heure début *</label>
+                                        <input type="time" id="heureDebut" class="form-control" @bind="heureDebut" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="heureFin" class="form-label">Heure fin *</label>
+                                        <input type="time" id="heureFin" class="form-control" @bind="heureFin" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Messages d'avertissement -->
+                            @if (depassementCapacite)
+                            {
+                                <div class="alert alert-warning">
+                                    <strong>Attention!</strong> Le nombre de personnes (@reservation.NombrePersonne) dépasse la capacité maximale de la salle (@salleInfo?.CapaciteMaximale).
+                                </div>
+                            }
+
+                            @if (salleNonDisponible)
+                            {
+                                <div class="alert alert-danger">
+                                    <strong>Salle non disponible!</strong> Cette salle est déjà réservée pour cette période.
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <div class="alert alert-danger">
+                                    @errorMessage
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(successMessage))
+                            {
+                                <div class="alert alert-success">
+                                    @successMessage
+                                </div>
+                            }
+
+                            <!-- Comparaison avant/après -->
+                            @if (reservationOriginale != null)
+                            {
+                                <div class="card bg-light mb-4">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Modifications</h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h6 class="text-muted">Avant</h6>
+                                                <ul class="list-unstyled small">
+                                                    <li><strong>Date:</strong> @reservationOriginale.HeureDebut.ToString("dd/MM/yyyy")</li>
+                                                    <li><strong>Horaire:</strong> @reservationOriginale.HeureDebut.ToString("HH:mm") - @reservationOriginale.HeureFin.ToString("HH:mm")</li>
+                                                    <li><strong>Personnes:</strong> @reservationOriginale.NombrePersonne</li>
+                                                </ul>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h6 class="text-primary">Après</h6>
+                                                <ul class="list-unstyled small">
+                                                    <li><strong>Date:</strong> @dateReservation?.ToString("dd/MM/yyyy")</li>
+                                                    <li><strong>Horaire:</strong> @heureDebut - @heureFin</li>
+                                                    <li><strong>Personnes:</strong> @reservation.NombrePersonne</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Boutons d'action -->
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <a href="/dashboard" class="btn btn-outline-secondary me-2">
+                                        <span class="oi oi-arrow-left"></span> Annuler
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger" @onclick="ConfirmerAnnulation">
+                                        <span class="oi oi-trash"></span> Annuler la réservation
+                                    </button>
+                                </div>
+                                <button type="submit" class="btn btn-primary" disabled="@(!PeutModifier())">
+                                    <span class="oi oi-check"></span> Enregistrer les modifications
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+
+                <!-- Autres réservations de la salle -->
+                @if (autresReservations.Any())
+                {
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">Autres réservations pour cette salle</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Heure début</th>
+                                            <th>Heure fin</th>
+                                            <th>Personnes</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var res in autresReservations)
+                                        {
+                                            <tr>
+                                                <td>@res.HeureDebut.ToString("dd/MM/yyyy")</td>
+                                                <td>@res.HeureDebut.ToString("HH:mm")</td>
+                                                <td>@res.HeureFin.ToString("HH:mm")</td>
+                                                <td>@res.NombrePersonne</td>
+                                                <td>
+                                                    <span class="badge @(res.HeureDebut > DateTime.Now ? "bg-success" : "bg-secondary")">
+                                                        @(res.HeureDebut > DateTime.Now ? "À venir" : "Passée")
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    <h4>Réservation introuvable</h4>
+                    <p>La réservation demandée n'existe pas ou a été supprimée.</p>
+                    <a href="/dashboard" class="btn btn-primary">Retour au dashboard</a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmation d'annulation -->
+@if (afficherModalAnnulation)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmer l'annulation</h5>
+                    <button type="button" class="btn-close" @onclick="() => afficherModalAnnulation = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Êtes-vous sûr de vouloir annuler cette réservation ?</p>
+                    <p class="text-muted">
+                        <strong>Salle:</strong> @salleInfo?.Numero<br />
+                        <strong>Date:</strong> @reservation?.HeureDebut.ToString("dd/MM/yyyy")<br />
+                        <strong>Horaire:</strong> @reservation?.HeureDebut.ToString("HH:mm") - @reservation?.HeureFin.ToString("HH:mm")
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => afficherModalAnnulation = false">Non, garder</button>
+                    <button type="button" class="btn btn-danger" @onclick="AnnulerReservation">Oui, annuler</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Reservation? reservation;
+    private Reservation? reservationOriginale;
+    private SalleViewModel? salleInfo;
+
+    private int reservationSelectionneeId;
+    private List<Reservation> toutesReservations = new();
+    private List<Reservation> autresReservations = new();
+
+    private DateTime? dateReservation;
+    private TimeOnly? heureDebut = new TimeOnly(9, 0);
+    private TimeOnly? heureFin = new TimeOnly(10, 0);
+
+    private bool depassementCapacite = false;
+    private bool salleNonDisponible = false;
+    private bool afficherModalAnnulation = false;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Backend - Charger la réservation depuis la base de données
+        LoadMockData();
+        ChargerReservations();
+    }
+
+    private void LoadMockData()
+    {
+        reservation = new Reservation
+        {
+            IdReservationPk = Id,
+            NoSalle = 1,
+            HeureDebut = DateTime.Today.AddDays(1).AddHours(9),
+            HeureFin = DateTime.Today.AddDays(1).AddHours(11),
+            NombrePersonne = 25,
+            NoPersonne = 1
+        };
+
+        reservationOriginale = new Reservation
+        {
+            IdReservationPk = Id,
+            NoSalle = reservation.NoSalle,
+            HeureDebut = reservation.HeureDebut,
+            HeureFin = reservation.HeureFin,
+            NombrePersonne = reservation.NombrePersonne,
+            NoPersonne = reservation.NoPersonne
+        };
+
+        salleInfo = new SalleViewModel { IdSallePk = 1, Numero = "A-101", CapaciteMaximale = 30 };
+
+        dateReservation = reservation.HeureDebut.Date;
+        heureDebut = TimeOnly.FromDateTime(reservation.HeureDebut);
+        heureFin = TimeOnly.FromDateTime(reservation.HeureFin);
+
+        reservationSelectionneeId = Id;
+    }
+
+    private void ChargerReservations()
+    {
+        // TODO: Backend - Charger toutes les réservations de l'utilisateur pour cette salle
+        toutesReservations = new List<Reservation>
+        {
+            reservation!,
+            new Reservation { IdReservationPk = 99, NoSalle = 1, HeureDebut = DateTime.Today.AddDays(2).AddHours(14), HeureFin = DateTime.Today.AddDays(2).AddHours(16), NombrePersonne = 20 }
+        };
+
+        autresReservations = new List<Reservation>
+        {
+            new Reservation { HeureDebut = DateTime.Today.AddDays(3).AddHours(10), HeureFin = DateTime.Today.AddDays(3).AddHours(12), NombrePersonne = 15 }
+        };
+    }
+
+    private void OnReservationChanged()
+    {
+        var selected = toutesReservations.FirstOrDefault(r => r.IdReservationPk == reservationSelectionneeId);
+        if (selected != null)
+        {
+            NavigationManager.NavigateTo($"/reservation/modifier/{reservationSelectionneeId}");
+        }
+    }
+
+    private void VerifierCapacite()
+    {
+        if (salleInfo != null && reservation != null && reservation.NombrePersonne > 0)
+        {
+            depassementCapacite = reservation.NombrePersonne > salleInfo.CapaciteMaximale;
+        }
+    }
+
+    private void VerifierDisponibilite()
+    {
+        // TODO: Backend - Vérifier la disponibilité via trigger trg_pasDeChevauchement
+        salleNonDisponible = false;
+    }
+
+    private bool PeutModifier()
+    {
+        return dateReservation.HasValue &&
+               heureDebut.HasValue &&
+               heureFin.HasValue &&
+               reservation?.NombrePersonne > 0 &&
+               !salleNonDisponible;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        if (dateReservation.HasValue && heureDebut.HasValue && heureFin.HasValue && reservation != null)
+        {
+            reservation.HeureDebut = dateReservation.Value.Add(heureDebut.Value.ToTimeSpan());
+            reservation.HeureFin = dateReservation.Value.Add(heureFin.Value.ToTimeSpan());
+
+            if (reservation.HeureFin <= reservation.HeureDebut)
+            {
+                errorMessage = "L'heure de fin doit être après l'heure de début.";
+                return;
+            }
+
+            // TODO: Backend - Mettre à jour la réservation
+            // - Vérifier que la réservation appartient à l'utilisateur
+            // - Vérifier la disponibilité (trigger trg_pasDeChevauchement)
+            // - Vérifier la capacité
+            // - Mettre à jour dans la base de données
+
+            successMessage = "Réservation modifiée avec succès! Redirection...";
+            await Task.Delay(2000);
+            NavigationManager.NavigateTo("/dashboard");
+        }
+    }
+
+    private void ConfirmerAnnulation()
+    {
+        afficherModalAnnulation = true;
+    }
+
+    private async Task AnnulerReservation()
+    {
+        // TODO: Backend - Supprimer la réservation
+        // - Vérifier que la réservation appartient à l'utilisateur
+        // - Supprimer de la base de données
+
+        afficherModalAnnulation = false;
+        successMessage = "Réservation annulée avec succès! Redirection...";
+        await Task.Delay(2000);
+        NavigationManager.NavigateTo("/dashboard");
+    }
+
+    public class SalleViewModel
+    {
+        public int IdSallePk { get; set; }
+        public string Numero { get; set; } = string.Empty;
+        public int CapaciteMaximale { get; set; }
+    }
+}

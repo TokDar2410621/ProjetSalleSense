@@ -1,0 +1,109 @@
+@page "/register"
+@using SallseSense.Models
+@using SallseSense.Services
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">Créer un compte</h3>
+
+                    <EditForm Model="@utilisateur" OnValidSubmit="@HandleRegistration">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label for="pseudo" class="form-label">Pseudo</label>
+                            <InputText id="pseudo" class="form-control" @bind-Value="utilisateur.Pseudo" placeholder="Pseudo" />
+                            <ValidationMessage For="@(() => utilisateur.Pseudo)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="courriel" class="form-label">Courriel</label>
+                            <InputText id="courriel" type="email" class="form-control" @bind-Value="utilisateur.Courriel" placeholder="Courriel" />
+                            <ValidationMessage For="@(() => utilisateur.Courriel)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="motDePasse" class="form-label">Mot de passe</label>
+                            <InputText id="motDePasse" type="password" class="form-control" @bind-Value="utilisateur.MotDePasse" placeholder="Mot de passe" />
+                            <ValidationMessage For="@(() => utilisateur.MotDePasse)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">Confirmer le mot de passe</label>
+                            <InputText id="confirmPassword" type="password" class="form-control" @bind-Value="confirmPassword" placeholder="Confirmer le mot de passe" />
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="acceptConditions" @bind="acceptConditions" />
+                            <label class="form-check-label" for="acceptConditions">
+                                J'accepte les conditions
+                            </label>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger" role="alert">
+                                @errorMessage
+                            </div>
+                        }
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary" disabled="@(!acceptConditions)">S'inscrire</button>
+                        </div>
+                    </EditForm>
+
+                    <div class="text-center mt-3">
+                        <a href="/login">Déjà un compte ? Se connecter</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Utilisateur utilisateur = new Utilisateur();
+    private string confirmPassword = string.Empty;
+    private bool acceptConditions = false;
+    private string errorMessage = string.Empty;
+
+    private async Task HandleRegistration()
+    {
+        errorMessage = string.Empty;
+
+        // Validation du mot de passe
+        if (utilisateur.MotDePasse != confirmPassword)
+        {
+            errorMessage = "Les mots de passe ne correspondent pas.";
+            return;
+        }
+
+        if (!acceptConditions)
+        {
+            errorMessage = "Vous devez accepter les conditions.";
+            return;
+        }
+
+        // Appel du service d'authentification pour créer l'utilisateur
+        var (success, userId, message) = await AuthService.RegisterAsync(
+            utilisateur.Pseudo,
+            utilisateur.Courriel,
+            utilisateur.MotDePasse
+        );
+
+        if (success)
+        {
+            // Inscription réussie - rediriger vers la page de connexion
+            NavigationManager.NavigateTo("/login");
+        }
+        else
+        {
+            // Afficher le message d'erreur
+            errorMessage = message;
+        }
+    }
+}

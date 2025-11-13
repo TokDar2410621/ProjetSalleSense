@@ -1,0 +1,343 @@
+@page "/salle/{Id:int}"
+@using SallseSense.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<div class="container-fluid mt-4">
+    @if (salle != null)
+    {
+        <!-- En-tête -->
+        <div class="row mb-4">
+            <div class="col">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/dashboard">Accueil</a></li>
+                        <li class="breadcrumb-item"><a href="/salles">Salles</a></li>
+                        <li class="breadcrumb-item active">Salle @salle.Numero</li>
+                    </ol>
+                </nav>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2>Salle @salle.Numero</h2>
+                        <p class="text-muted">Détails et informations de la salle</p>
+                    </div>
+                    <div>
+                        <span class="badge @(salle.EstDisponible ? "bg-success" : "bg-danger") fs-5">
+                            @(salle.EstDisponible ? "Disponible" : "Occupée")
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informations principales -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Informations générales</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <strong>Numéro:</strong>
+                                <p>@salle.Numero</p>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Capacité maximale:</strong>
+                                <p>@salle.CapaciteMaximale personnes</p>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <strong>Bâtiment:</strong>
+                                <p>@salle.Numero.Split('-')[0]</p>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Étage:</strong>
+                                <p>@salle.Numero</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Disponibilité et réservations -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Réservations du jour</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (reservationsDuJour.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Heure début</th>
+                                            <th>Heure fin</th>
+                                            <th>Personnes</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var reservation in reservationsDuJour)
+                                        {
+                                            <tr>
+                                                <td>@reservation.HeureDebut.ToString("HH:mm")</td>
+                                                <td>@reservation.HeureFin.ToString("HH:mm")</td>
+                                                <td>@reservation.NombrePersonne</td>
+                                                <td>
+                                                    <span class="badge @(reservation.EstEnCours ? "bg-warning text-dark" : "bg-secondary")">
+                                                        @(reservation.EstEnCours ? "En cours" : "Terminée")
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Aucune réservation aujourd'hui</p>
+                        }
+
+                        <div class="d-grid gap-2 mt-3">
+                            <a href="/reservation/creer?salleId=@Id" class="btn btn-primary">
+                                <span class="oi oi-calendar"></span> Créer une réservation
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historique des activités -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Résumé des activités récentes</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (activitesRecentes.Any())
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var activite in activitesRecentes)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h6 class="mb-1">@activite.Type</h6>
+                                            <small>@activite.DateHeure.ToString("dd/MM HH:mm")</small>
+                                        </div>
+                                        <p class="mb-1">@activite.Description</p>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Aucune activité récente</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar droite -->
+            <div class="col-md-4">
+                <!-- Photo archive -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Photo archive</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (photosArchive.Any())
+                        {
+                            <div class="row g-2">
+                                @foreach (var photo in photosArchive.Take(6))
+                                {
+                                    <div class="col-6">
+                                        <div class="card">
+                                            <div class="card-body p-2 text-center bg-light">
+                                                <span class="oi oi-image" style="font-size: 2rem;"></span>
+                                                <p class="mb-0 small">@photo.DateHeure.ToString("dd/MM HH:mm")</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            @if (photosArchive.Count > 6)
+                            {
+                                <button class="btn btn-sm btn-outline-secondary w-100 mt-2">
+                                    Voir toutes (@photosArchive.Count)
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-muted text-center">Aucune photo disponible</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Capteurs -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Capteurs actifs</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (capteurs.Any())
+                        {
+                            <ul class="list-group list-group-flush">
+                                @foreach (var capteur in capteurs)
+                                {
+                                    <li class="list-group-item px-0">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>@capteur.Nom</strong>
+                                                <br />
+                                                <small class="text-muted">@capteur.Type</small>
+                                            </div>
+                                            <span class="badge @(capteur.EstActif ? "bg-success" : "bg-secondary")">
+                                                @(capteur.EstActif ? "Actif" : "Inactif")
+                                            </span>
+                                        </div>
+                                        @if (capteur.DerniereMesure.HasValue)
+                                        {
+                                            <div class="mt-2">
+                                                <small>Dernière mesure: @capteur.DerniereMesure.Value.ToString("F2")</small>
+                                            </div>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-muted">Aucun capteur configuré</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Actions rapides -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Actions rapides</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="/reservation/creer?salleId=@Id" class="btn btn-outline-primary">
+                                <span class="oi oi-plus"></span> Nouvelle réservation
+                            </a>
+                            <button class="btn btn-outline-secondary">
+                                <span class="oi oi-graph"></span> Voir statistiques
+                            </button>
+                            <button class="btn btn-outline-info">
+                                <span class="oi oi-bell"></span> Configurer alertes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning">
+            <h4>Salle introuvable</h4>
+            <p>La salle demandée n'existe pas ou a été supprimée.</p>
+            <a href="/salles" class="btn btn-primary">Retour à la liste des salles</a>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private SalleDetailViewModel? salle;
+    private List<ReservationViewModel> reservationsDuJour = new();
+    private List<ActiviteViewModel> activitesRecentes = new();
+    private List<PhotoViewModel> photosArchive = new();
+    private List<CapteurViewModel> capteurs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Backend - Charger les détails de la salle depuis la base de données
+        // - Charger la salle avec Id
+        // - Charger les réservations du jour
+        // - Charger l'historique des activités
+        // - Charger les photos d'archive
+        // - Charger les capteurs associés
+
+        LoadMockData();
+    }
+
+    private void LoadMockData()
+    {
+        salle = new SalleDetailViewModel
+        {
+            IdSallePk = Id,
+            Numero = $"A-{100 + Id}",
+            CapaciteMaximale = 30,
+            EstDisponible = Id % 2 == 0
+        };
+
+        reservationsDuJour = new List<ReservationViewModel>
+        {
+            new ReservationViewModel { HeureDebut = DateTime.Today.AddHours(9), HeureFin = DateTime.Today.AddHours(11), NombrePersonne = 25, EstEnCours = false },
+            new ReservationViewModel { HeureDebut = DateTime.Today.AddHours(14), HeureFin = DateTime.Today.AddHours(16), NombrePersonne = 30, EstEnCours = true },
+        };
+
+        activitesRecentes = new List<ActiviteViewModel>
+        {
+            new ActiviteViewModel { Type = "Réservation créée", Description = "Réservation pour 25 personnes", DateHeure = DateTime.Now.AddHours(-2) },
+            new ActiviteViewModel { Type = "Capteur activé", Description = "Capteur de température activé", DateHeure = DateTime.Now.AddHours(-5) },
+        };
+
+        photosArchive = new List<PhotoViewModel>
+        {
+            new PhotoViewModel { DateHeure = DateTime.Now.AddDays(-1) },
+            new PhotoViewModel { DateHeure = DateTime.Now.AddDays(-2) },
+            new PhotoViewModel { DateHeure = DateTime.Now.AddDays(-3) },
+        };
+
+        capteurs = new List<CapteurViewModel>
+        {
+            new CapteurViewModel { Nom = "Temp-01", Type = "Température", EstActif = true, DerniereMesure = 22.5 },
+            new CapteurViewModel { Nom = "Motion-01", Type = "Mouvement", EstActif = true, DerniereMesure = null },
+        };
+    }
+
+    public class SalleDetailViewModel
+    {
+        public int IdSallePk { get; set; }
+        public string Numero { get; set; } = string.Empty;
+        public int CapaciteMaximale { get; set; }
+        public bool EstDisponible { get; set; }
+    }
+
+    public class ReservationViewModel
+    {
+        public DateTime HeureDebut { get; set; }
+        public DateTime HeureFin { get; set; }
+        public int NombrePersonne { get; set; }
+        public bool EstEnCours { get; set; }
+    }
+
+    public class ActiviteViewModel
+    {
+        public string Type { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DateTime DateHeure { get; set; }
+    }
+
+    public class PhotoViewModel
+    {
+        public DateTime DateHeure { get; set; }
+    }
+
+    public class CapteurViewModel
+    {
+        public string Nom { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public bool EstActif { get; set; }
+        public double? DerniereMesure { get; set; }
+    }
+}

@@ -1,0 +1,220 @@
+@page "/photos"
+@using SallseSense.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Logging
+@attribute [Authorize]
+@inject PhotoService PhotoService
+@inject ILogger<Photos> Logger
+
+<PageTitle>Photos - SalleSense</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="display-4">
+                <span class="oi oi-camera-slr" aria-hidden="true"></span>
+                Galerie de Photos
+            </h1>
+            <p class="text-muted">Photos capturées par les caméras dans les salles</p>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Chargement...</span>
+            </div>
+            <p class="mt-3">Chargement des photos...</p>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Erreur:</strong> @errorMessage
+        </div>
+    }
+    else if (photos == null || !photos.Any())
+    {
+        <div class="alert alert-info" role="alert">
+            <strong>Aucune photo disponible</strong>
+            <p class="mb-0 mt-2">Aucune photo n'a encore été capturée par les caméras.</p>
+        </div>
+    }
+    else
+    {
+        <!-- Filtres -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Filtres</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Filtrer par salle:</label>
+                            <select class="form-select" @onchange="OnSalleFilterChanged">
+                                <option value="0">Toutes les salles</option>
+                                @foreach (var salle in salles)
+                                {
+                                    <option value="@salle">Salle @salle</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span><strong>Total:</strong> @filteredPhotos.Count photo(s)</span>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="RefreshPhotos">
+                                <span class="oi oi-reload" aria-hidden="true"></span> Actualiser
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Galerie de photos -->
+        <div class="row">
+            @foreach (var photo in filteredPhotos)
+            {
+                <div class="col-md-4 col-lg-3 mb-4">
+                    <div class="card h-100 shadow-sm">
+                        <!-- Image miniature cliquable -->
+                        <div class="photo-container" style="cursor: pointer;" @onclick="() => SelectPhoto(photo)">
+                            <img src="/api/photo/@photo.IdDonnee"
+                                 class="card-img-top"
+                                 alt="Photo du @photo.DateHeure.ToString("dd/MM/yyyy HH:mm")"
+                                 style="height: 200px; object-fit: cover;">
+                        </div>
+
+                        <div class="card-body">
+                            <h6 class="card-title">Photo #@photo.IdDonnee</h6>
+                            <p class="card-text small mb-1">
+                                <strong>Date:</strong> @photo.DateHeure.ToString("dd/MM/yyyy")<br />
+                                <strong>Heure:</strong> @photo.DateHeure.ToString("HH:mm:ss")<br />
+                                <strong>Salle:</strong> @photo.NoSalle<br />
+                                <strong>Taille:</strong> @photo.TailleFormatee
+                            </p>
+                        </div>
+
+                        <div class="card-footer bg-transparent">
+                            <a href="/api/photo/@photo.IdDonnee"
+                               download="photo_@(photo.IdDonnee)_@(photo.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
+                               class="btn btn-sm btn-outline-primary w-100">
+                                <span class="oi oi-data-transfer-download" aria-hidden="true"></span> Télécharger
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Modal pour afficher la photo en grand -->
+@if (selectedPhoto != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="CloseModal">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h5 class="modal-title">Photo #@selectedPhoto.IdDonnee - @selectedPhoto.DateHeure.ToString("dd/MM/yyyy HH:mm:ss")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="/api/photo/@selectedPhoto.IdDonnee"
+                         class="img-fluid"
+                         alt="Photo du @selectedPhoto.DateHeure"
+                         style="max-height: 70vh;">
+                </div>
+                <div class="modal-footer">
+                    <div class="me-auto">
+                        <strong>Salle:</strong> @selectedPhoto.NoSalle |
+                        <strong>Taille:</strong> @selectedPhoto.TailleFormatee
+                    </div>
+                    <a href="/api/photo/@selectedPhoto.IdDonnee"
+                       download="photo_@(selectedPhoto.IdDonnee)_@(selectedPhoto.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
+                       class="btn btn-primary">
+                        <span class="oi oi-data-transfer-download" aria-hidden="true"></span> Télécharger
+                    </a>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PhotoInfo> photos = new();
+    private List<PhotoInfo> filteredPhotos = new();
+    private List<int> salles = new();
+    private PhotoInfo selectedPhoto = null;
+    private bool isLoading = true;
+    private string errorMessage = null;
+    private int selectedSalleFilter = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPhotos();
+    }
+
+    private async Task LoadPhotos()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+
+            photos = await PhotoService.GetAllPhotosAsync();
+            filteredPhotos = photos;
+
+            // Extraire la liste unique des salles
+            salles = photos.Select(p => p.NoSalle).Distinct().OrderBy(s => s).ToList();
+
+            Logger.LogInformation($"Chargement de {photos.Count} photos réussi");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Impossible de charger les photos: {ex.Message}";
+            Logger.LogError(ex, "Erreur lors du chargement des photos");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshPhotos()
+    {
+        await LoadPhotos();
+        ApplyFilter();
+    }
+
+    private void OnSalleFilterChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int salleId))
+        {
+            selectedSalleFilter = salleId;
+            ApplyFilter();
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        if (selectedSalleFilter == 0)
+        {
+            filteredPhotos = photos;
+        }
+        else
+        {
+            filteredPhotos = photos.Where(p => p.NoSalle == selectedSalleFilter).ToList();
+        }
+    }
+
+    private void SelectPhoto(PhotoInfo photo)
+    {
+        selectedPhoto = photo;
+    }
+
+    private void CloseModal()
+    {
+        selectedPhoto = null;
+    }
+}

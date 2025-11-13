@@ -1,0 +1,261 @@
+@page "/dashboard"
+@using SallseSense.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Surveillez et réservez vos salles en temps réel</h2>
+            <p class="text-muted">Consultez les salles disponibles et gérez vos réservations en temps et en heure de début et de fin.</p>
+        </div>
+    </div>
+
+    <!-- Filtres de recherche -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Voir les salles</label>
+                            <select class="form-select" @bind="filtreType">
+                                <option value="all">Toutes</option>
+                                <option value="disponible">Disponibles</option>
+                                <option value="reservee">Réservées</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Recherche</label>
+                            <input type="text" class="form-select" @bind="rechercheTexte" placeholder="Rechercher..." />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Capacité min</label>
+                            <input type="number" class="form-select" @bind="capaciteMin" placeholder="0" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Date</label>
+                            <input type="date" class="form-select" @bind="dateFiltre" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Statistiques -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Statistiques</h4>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Salles actives (20)</h5>
+                    <p class="card-text display-6">@nombreSallesActives</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Réservations en cours</h5>
+                    <p class="card-text display-6">@nombreReservations</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Disponibles maintenant</h5>
+                    <p class="card-text display-6">@nombreSallesDisponibles</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Dernières activités -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Dernières activités</h4>
+            <div class="card">
+                <div class="card-body">
+                    @if (dernieresActivites.Any())
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var activite in dernieresActivites)
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>@activite.Type</strong> - Salle @activite.NomSalle
+                                            <br />
+                                            <small class="text-muted">@activite.DateHeure.ToString("dd/MM/yyyy HH:mm")</small>
+                                        </div>
+                                        <span class="badge bg-secondary">@activite.Status</span>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Aucune activité récente</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Grille de salles -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4>Toutes les salles</h4>
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary @(vueGrille ? "active" : "")" @onclick="() => vueGrille = true">
+                        <span class="oi oi-grid-three-up"></span> Grille
+                    </button>
+                    <button type="button" class="btn btn-outline-primary @(!vueGrille ? "active" : "")" @onclick="() => vueGrille = false">
+                        <span class="oi oi-list"></span> Liste
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (vueGrille)
+    {
+        <div class="row g-4">
+            @foreach (var salle in salles)
+            {
+                <div class="col-md-4">
+                    <div class="card h-100 @(salle.EstDisponible ? "" : "border-warning")">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title">Salle @salle.Numero</h5>
+                                <span class="badge @(salle.EstDisponible ? "bg-success" : "bg-warning text-dark")">
+                                    @(salle.EstDisponible ? "Libre" : "Occupée")
+                                </span>
+                            </div>
+                            <p class="card-text">
+                                <strong>Capacité:</strong> @salle.CapaciteMaximale personnes<br />
+                                <strong>Local:</strong> @salle.Numero
+                            </p>
+                            <div class="d-grid gap-2">
+                                <a href="/salle/@salle.IdSallePk" class="btn btn-outline-primary btn-sm">Voir détails</a>
+                            </div>
+                        </div>
+                        <div class="card-footer text-muted">
+                            <small>Moniteur: @(salle.MoniteurActif ? "Actif" : "Inactif")</small>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Salle</th>
+                                <th>Capacité</th>
+                                <th>Status</th>
+                                <th>Moniteur</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var salle in salles)
+                            {
+                                <tr>
+                                    <td><strong>Salle @salle.Numero</strong></td>
+                                    <td>@salle.CapaciteMaximale personnes</td>
+                                    <td>
+                                        <span class="badge @(salle.EstDisponible ? "bg-success" : "bg-warning text-dark")">
+                                            @(salle.EstDisponible ? "Libre" : "Occupée")
+                                        </span>
+                                    </td>
+                                    <td>@(salle.MoniteurActif ? "Actif" : "Inactif")</td>
+                                    <td>
+                                        <a href="/salle/@salle.IdSallePk" class="btn btn-sm btn-outline-primary">Détails</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string filtreType = "all";
+    private string rechercheTexte = string.Empty;
+    private int? capaciteMin = null;
+    private DateTime? dateFiltre = null;
+    private bool vueGrille = true;
+
+    // Statistiques
+    private int nombreSallesActives = 0;
+    private int nombreReservations = 0;
+    private int nombreSallesDisponibles = 0;
+
+    // Listes
+    private List<SalleViewModel> salles = new();
+    private List<ActiviteViewModel> dernieresActivites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Backend - Charger les données depuis la base de données
+        // - Charger toutes les salles
+        // - Charger les statistiques
+        // - Charger les dernières activités
+
+        // Données de démonstration
+        LoadMockData();
+    }
+
+    private void LoadMockData()
+    {
+        salles = new List<SalleViewModel>
+        {
+            new SalleViewModel { IdSallePk = 1, Numero = "A-101", CapaciteMaximale = 30, EstDisponible = true, MoniteurActif = true },
+            new SalleViewModel { IdSallePk = 2, Numero = "A-102", CapaciteMaximale = 25, EstDisponible = false, MoniteurActif = true },
+            new SalleViewModel { IdSallePk = 3, Numero = "B-201", CapaciteMaximale = 40, EstDisponible = true, MoniteurActif = false },
+        };
+
+        dernieresActivites = new List<ActiviteViewModel>
+        {
+            new ActiviteViewModel { Type = "Réservation", NomSalle = "A-101", DateHeure = DateTime.Now.AddMinutes(-5), Status = "Confirmée" },
+            new ActiviteViewModel { Type = "Annulation", NomSalle = "B-201", DateHeure = DateTime.Now.AddHours(-1), Status = "Annulée" },
+        };
+
+        nombreSallesActives = 20;
+        nombreReservations = 8;
+        nombreSallesDisponibles = 12;
+    }
+
+    // View Models
+    public class SalleViewModel
+    {
+        public int IdSallePk { get; set; }
+        public string Numero { get; set; } = string.Empty;
+        public int CapaciteMaximale { get; set; }
+        public bool EstDisponible { get; set; }
+        public bool MoniteurActif { get; set; }
+    }
+
+    public class ActiviteViewModel
+    {
+        public string Type { get; set; } = string.Empty;
+        public string NomSalle { get; set; } = string.Empty;
+        public DateTime DateHeure { get; set; }
+        public string Status { get; set; } = string.Empty;
+    }
+}
