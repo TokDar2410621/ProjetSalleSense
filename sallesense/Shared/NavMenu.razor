@@ -5,6 +5,7 @@
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @using Microsoft.EntityFrameworkCore
 @inject ProtectedSessionStorage SessionStorage
+@inject ProtectedLocalStorage ProtectedLocalStorage
 @inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
 
 <div class="top-row pl-4 navbar navbar-dark">
@@ -43,17 +44,18 @@
         </li>
 
         @* Lien Admin - visible seulement pour les admins *@
-        @if (isAdmin)
-        {
-            <li class="nav-item px-3 mt-3">
-                <div class="nav-section-title text-muted small px-3">ADMINISTRATION</div>
-            </li>
-            <li class="nav-item px-3">
-                <NavLink class="nav-link" href="admin">
-                    <span class="oi oi-shield" aria-hidden="true"></span> Gestion Utilisateurs
-                </NavLink>
-            </li>
-        }
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                    <li class="nav-item px-3 mt-3">
+                        <div class="nav-section-title text-muted small px-3">ADMINISTRATION</div>
+                    </li>
+                    <li class="nav-item px-3">
+                        <NavLink class="nav-link" href="admin">
+                            <span class="oi oi-shield" aria-hidden="true"></span> Gestion Utilisateurs
+                        </NavLink>
+                    </li>
+            </Authorized>
+        </AuthorizeView>
 
         <li class="nav-item px-3 mt-3">
             <div class="nav-section-title text-muted small px-3">COMPTE</div>

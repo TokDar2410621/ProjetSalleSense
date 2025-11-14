@@ -4,6 +4,7 @@
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
+@attribute [Authorize]
 @inject NavigationManager NavigationManager
 @inject ProtectedSessionStorage SessionStorage
 
@@ -232,7 +233,7 @@ else
                 return;
             }
 
-            // Charger tous les utilisateurs (sans mdp_salt/mdp_hash pour éviter SqlNullValueException)
+         
             utilisateurs = await db.Utilisateurs
                 .OrderBy(u => u.Pseudo)
                 .Select(u => new Utilisateur

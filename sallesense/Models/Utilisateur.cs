@@ -23,10 +23,10 @@ public partial class Utilisateur
     [StringLength(120)]
     public string Courriel { get; set; }
 
-    [Required]
+    
     [Column("motDePasse")]
     [StringLength(255)]
-    public string MotDePasse { get; set; }
+    public string? MotDePasse { get; set; }
 
     [Column("mdp_salt")]
     [MaxLength(16)]

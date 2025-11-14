@@ -135,6 +135,7 @@ namespace SallseSense.Services
                 return null;
 
             var base64 = Convert.ToBase64String(photoBytes);
+            // pourquoi ça n'arrive pas à convertir les photos ? peutre du a la maniere dont mon code python change  les photos en bineaire
             return $"data:image/jpeg;base64,{base64}";
         }
 
@@ -144,7 +145,7 @@ namespace SallseSense.Services
         /// <param name="photoBytes">Bytes de la photo</param>
         /// <param name="idCapteur">ID du capteur</param>
         /// <param name="noSalle">Numéro de la salle</param>
-        /// <returns>ID de la donnée créée, ou 0 si échec</returns>
+        /// <returns>ID de la donnée crée, ou 0 si échec</returns>
         public async Task<int> InsertPhotoAsync(byte[] photoBytes, int idCapteur, int noSalle)
         {
             try

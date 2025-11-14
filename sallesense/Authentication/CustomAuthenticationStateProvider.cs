@@ -19,8 +19,8 @@ namespace SallseSense.Authentication
             ProtectedLocalStorage localStorage,
             ProtectedSessionStorage sessionStorage)
         {
-            _localStorage = localStorage;
-            _sessionStorage = sessionStorage;
+            _localStorage = localStorage; // je n'arrive pas a l'expliquer mais ma sessionStorage se vidais a chaque refresh donc j'ai fait ceci
+            _sessionStorage = sessionStorage; //pourquoi ma sessionStorage se vidais a chaque refresh?
         }
 
         /// <summary>
