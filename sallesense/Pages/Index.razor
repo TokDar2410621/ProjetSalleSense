@@ -1,7 +1,38 @@
 ﻿@page "/"
+@using Microsoft.AspNetCore.Hosting
+@using Microsoft.Extensions.Configuration
+@inject IWebHostEnvironment Env
+@inject IConfiguration Config
 
 <h1>Hello, world!</h1>
 
 Welcome to your new app.
 
+<div class="alert alert-info mt-3">
+    <h4>🔍 Configuration actuelle :</h4>
+    <ul>
+        <li><strong>Environnement :</strong> @Env.EnvironmentName</li>
+        <li><strong>Serveur BD :</strong> @GetServerName()</li>
+    </ul>
+</div>
+
 <SurveyPrompt Title="How is Blazor working for you?" />
+
+@code {
+    private string GetServerName()
+    {
+        var connectionString = Config.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrEmpty(connectionString))
+            return "Non configuré";
+
+        // Extraire le nom du serveur de la chaîne de connexion
+        var serverStart = connectionString.IndexOf("Server=");
+        if (serverStart < 0) return "Inconnu";
+
+        serverStart += 7; // Longueur de "Server="
+        var serverEnd = connectionString.IndexOf(";", serverStart);
+        if (serverEnd < 0) return "Inconnu";
+
+        return connectionString.Substring(serverStart, serverEnd - serverStart);
+    }
+}

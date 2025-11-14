@@ -1,6 +1,9 @@
 @page "/dashboard"
 @using SallseSense.Models
+@using SallseSense.Data
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
@@ -212,33 +215,50 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // TODO: Backend - Charger les données depuis la base de données
-        // - Charger toutes les salles
-        // - Charger les statistiques
-        // - Charger les dernières activités
-
-        // Données de démonstration
-        LoadMockData();
+        await LoadDataFromDatabase();
     }
 
-    private void LoadMockData()
+    private async Task LoadDataFromDatabase()
     {
-        salles = new List<SalleViewModel>
-        {
-            new SalleViewModel { IdSallePk = 1, Numero = "A-101", CapaciteMaximale = 30, EstDisponible = true, MoniteurActif = true },
-            new SalleViewModel { IdSallePk = 2, Numero = "A-102", CapaciteMaximale = 25, EstDisponible = false, MoniteurActif = true },
-            new SalleViewModel { IdSallePk = 3, Numero = "B-201", CapaciteMaximale = 40, EstDisponible = true, MoniteurActif = false },
-        };
+        await using var db = await DbFactory.CreateDbContextAsync();
 
-        dernieresActivites = new List<ActiviteViewModel>
-        {
-            new ActiviteViewModel { Type = "Réservation", NomSalle = "A-101", DateHeure = DateTime.Now.AddMinutes(-5), Status = "Confirmée" },
-            new ActiviteViewModel { Type = "Annulation", NomSalle = "B-201", DateHeure = DateTime.Now.AddHours(-1), Status = "Annulée" },
-        };
+        // Charger toutes les salles depuis la BD
+        var sallesBd = await db.Salles.ToListAsync();
+        var maintenant = DateTime.Now;
 
-        nombreSallesActives = 20;
-        nombreReservations = 8;
-        nombreSallesDisponibles = 12;
+        salles = sallesBd.Select(s => new SalleViewModel
+        {
+            IdSallePk = s.IdSallePk,
+            Numero = s.Numero,
+            CapaciteMaximale = s.CapaciteMaximale,
+            // Vérifier si la salle est disponible (pas de réservation en cours)
+            EstDisponible = !db.Reservations.Any(r =>
+                r.NoSalle == s.IdSallePk &&
+                r.HeureDebut <= maintenant &&
+                r.HeureFin >= maintenant),
+            MoniteurActif = db.Capteurs.Any() // Au moins un capteur existe dans le système
+        }).ToList();
+
+        // Calculer les statistiques
+        nombreSallesActives = sallesBd.Count;
+        nombreReservations = await db.Reservations
+            .Where(r => r.HeureDebut >= maintenant)
+            .CountAsync();
+        nombreSallesDisponibles = salles.Count(s => s.EstDisponible);
+
+        // Charger les dernières activités (dernières réservations)
+        var dernieresRes = await db.Reservations
+            .OrderByDescending(r => r.HeureDebut)
+            .Take(5)
+            .ToListAsync();
+
+        dernieresActivites = dernieresRes.Select(r => new ActiviteViewModel
+        {
+            Type = "Réservation",
+            NomSalle = db.Salles.FirstOrDefault(s => s.IdSallePk == r.NoSalle)?.Numero ?? "Inconnue",
+            DateHeure = r.HeureDebut,
+            Status = r.HeureFin < maintenant ? "Terminée" : (r.HeureDebut <= maintenant ? "En cours" : "À venir")
+        }).ToList();
     }
 
     // View Models

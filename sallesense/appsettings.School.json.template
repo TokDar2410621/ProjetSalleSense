@@ -1,0 +1,12 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=DICJWIN01.cegepjonquiere.ca;Database=Prog3A25_bdSalleSense;User Id=VOTRE_USERNAME;Password=VOTRE_PASSWORD;TrustServerCertificate=true;"
+  }
+}

@@ -22,7 +22,8 @@ CREATE OR ALTER PROCEDURE dbo.usp_Reservation_Creer
     @HeureDebut DATETIME2,
     @HeureFin DATETIME2,
     @NombrePersonnes INT,
-    @IdReservation INT OUTPUT
+    @IdReservation INT OUTPUT,
+    @CodeStatut INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -32,15 +33,17 @@ BEGIN
         -- Vérifier si l'utilisateur existe
         IF NOT EXISTS (SELECT 1 FROM Utilisateur WHERE idUtilisateur_PK = @IdUtilisateur)
         BEGIN
+            SET @CodeStatut = -1;  -- Utilisateur introuvable
             ROLLBACK;
-            RETURN -1;  -- Utilisateur introuvable
+            RETURN;
         END
 
         -- Vérifier si l'utilisateur est banni
         IF EXISTS (SELECT 1 FROM Blacklist WHERE idUtilisateur = @IdUtilisateur)
         BEGIN
+            SET @CodeStatut = -2;  -- Utilisateur banni
             ROLLBACK;
-            RETURN -2;  -- Utilisateur banni
+            RETURN;
         END
 
         -- Vérifier si la salle existe
@@ -51,15 +54,17 @@ BEGIN
 
         IF @CapaciteMax IS NULL
         BEGIN
+            SET @CodeStatut = -3;  -- Salle introuvable
             ROLLBACK;
-            RETURN -3;  -- Salle introuvable
+            RETURN;
         END
 
         -- Vérifier la capacité
         IF @NombrePersonnes > @CapaciteMax
         BEGIN
+            SET @CodeStatut = -4;  -- Capacité dépassée
             ROLLBACK;
-            RETURN -4;  -- Capacité dépassée
+            RETURN;
         END
 
         -- Vérifier les chevauchements
@@ -73,8 +78,9 @@ BEGIN
             )
         )
         BEGIN
+            SET @CodeStatut = -5;  -- Salle déjà réservée
             ROLLBACK;
-            RETURN -5;  -- Salle déjà réservée
+            RETURN;
         END
 
         -- Créer la réservation
@@ -82,15 +88,15 @@ BEGIN
         VALUES (@HeureDebut, @HeureFin, @IdSalle, @IdUtilisateur, @NombrePersonnes);
 
         SET @IdReservation = SCOPE_IDENTITY();
+        SET @CodeStatut = 0;  -- Succès
 
         COMMIT TRANSACTION;
-        RETURN 0;  -- Succès
 
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-        RETURN -99;  -- Erreur système
+        SET @CodeStatut = -99;  -- Erreur système
     END CATCH
 END;
 GO
@@ -504,6 +510,187 @@ EXEC dbo.usp_Rapport_Utilisateur @IdUtilisateur = 1;
 =========================================*/
 
 
+/* ============================================================
+   8) usp_Utilisateur_Modifier
+   ----------------------------------------------------------
+   Modifie les informations d'un utilisateur (pseudo et email)
+   avec vérification des doublons
+   ============================================================ */
+CREATE OR ALTER PROCEDURE dbo.usp_Utilisateur_Modifier
+    @IdUtilisateur INT,
+    @NouveauPseudo NVARCHAR(40),
+    @NouveauCourriel NVARCHAR(40),
+    @CodeStatut INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Vérifier si l'utilisateur existe
+        IF NOT EXISTS (SELECT 1 FROM Utilisateur WHERE idUtilisateur_PK = @IdUtilisateur)
+        BEGIN
+            SET @CodeStatut = -1;  -- Utilisateur introuvable
+            ROLLBACK;
+            RETURN;
+        END
+
+        -- Vérifier si le pseudo est déjà utilisé par un autre utilisateur
+        IF EXISTS (
+            SELECT 1 FROM Utilisateur
+            WHERE pseudo = @NouveauPseudo
+            AND idUtilisateur_PK != @IdUtilisateur
+        )
+        BEGIN
+            SET @CodeStatut = -2;  -- Pseudo déjà utilisé
+            ROLLBACK;
+            RETURN;
+        END
+
+        -- Vérifier si l'email est déjà utilisé par un autre utilisateur
+        IF EXISTS (
+            SELECT 1 FROM Utilisateur
+            WHERE courriel = @NouveauCourriel
+            AND idUtilisateur_PK != @IdUtilisateur
+        )
+        BEGIN
+            SET @CodeStatut = -3;  -- Email déjà utilisé
+            ROLLBACK;
+            RETURN;
+        END
+
+        -- Mettre à jour les informations
+        UPDATE Utilisateur
+        SET pseudo = @NouveauPseudo,
+            courriel = @NouveauCourriel
+        WHERE idUtilisateur_PK = @IdUtilisateur;
+
+        SET @CodeStatut = 0;  -- Succès
+        COMMIT TRANSACTION;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        SET @CodeStatut = -99;  -- Erreur système
+    END CATCH
+END;
+GO
+
+/* ======= EXEMPLE D'UTILISATION =======
+DECLARE @Result INT;
+
+EXEC dbo.usp_Utilisateur_Modifier
+    @IdUtilisateur = 1,
+    @NouveauPseudo = 'NouveauPseudo',
+    @NouveauCourriel = 'nouveau@email.com',
+    @CodeStatut = @Result OUTPUT;
+
+IF @Result = 0
+    PRINT 'Informations modifiées avec succès';
+ELSE IF @Result = -1
+    PRINT 'Utilisateur introuvable';
+ELSE IF @Result = -2
+    PRINT 'Pseudo déjà utilisé';
+ELSE IF @Result = -3
+    PRINT 'Email déjà utilisé';
+ELSE
+    PRINT 'Erreur système';
+=========================================*/
+
+
+/* ============================================================
+   9) usp_Utilisateur_ChangerMotDePasse
+   ----------------------------------------------------------
+   Change le mot de passe d'un utilisateur après validation
+   de l'ancien mot de passe
+   ============================================================ */
+CREATE OR ALTER PROCEDURE dbo.usp_Utilisateur_ChangerMotDePasse
+    @IdUtilisateur INT,
+    @AncienMotDePasse NVARCHAR(MAX),
+    @NouveauSalt VARBINARY(16),
+    @NouveauHash VARBINARY(32),
+    @CodeStatut INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        DECLARE @SaltActuel VARBINARY(16);
+        DECLARE @HashActuel VARBINARY(32);
+
+        -- Récupérer le salt et hash actuels
+        SELECT @SaltActuel = mdp_salt, @HashActuel = mdp_hash
+        FROM Utilisateur
+        WHERE idUtilisateur_PK = @IdUtilisateur;
+
+        IF @SaltActuel IS NULL
+        BEGIN
+            SET @CodeStatut = -1;  -- Utilisateur introuvable
+            ROLLBACK;
+            RETURN;
+        END
+
+        -- Vérifier l'ancien mot de passe (comme dans Reset_Password_Admin_Correct.sql)
+        DECLARE @HashCalcule VARBINARY(32);
+        SET @HashCalcule = HASHBYTES('SHA2_256', @SaltActuel + CONVERT(VARBINARY(4000), @AncienMotDePasse));
+
+        IF @HashCalcule != @HashActuel
+        BEGIN
+            SET @CodeStatut = -2;  -- Ancien mot de passe incorrect
+            ROLLBACK;
+            RETURN;
+        END
+
+        -- Mettre à jour le mot de passe
+        UPDATE Utilisateur
+        SET mdp_salt = @NouveauSalt,
+            mdp_hash = @NouveauHash,
+            motDePasse = @NouveauHash  -- Aussi mettre à jour motDePasse pour compatibilité
+        WHERE idUtilisateur_PK = @IdUtilisateur;
+
+        SET @CodeStatut = 0;  -- Succès
+        COMMIT TRANSACTION;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        SET @CodeStatut = -99;  -- Erreur système
+    END CATCH
+END;
+GO
+
+/* ======= EXEMPLE D'UTILISATION =======
+DECLARE @Result INT;
+DECLARE @NouveauSalt NVARCHAR(100) = NEWID();
+DECLARE @NouveauMotDePasse NVARCHAR(MAX) = 'MonNouveauMotDePasse123';
+DECLARE @NouveauHash NVARCHAR(64);
+
+-- Calculer le hash du nouveau mot de passe
+DECLARE @CombinaisonNouveau NVARCHAR(MAX);
+SET @CombinaisonNouveau = @NouveauMotDePasse + @NouveauSalt;
+SET @NouveauHash = CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', CONVERT(VARBINARY(MAX), @CombinaisonNouveau)), 2);
+
+EXEC dbo.usp_Utilisateur_ChangerMotDePasse
+    @IdUtilisateur = 1,
+    @AncienMotDePasse = 'AncienMotDePasse123',
+    @NouveauSalt = @NouveauSalt,
+    @NouveauHash = @NouveauHash,
+    @CodeStatut = @Result OUTPUT;
+
+IF @Result = 0
+    PRINT 'Mot de passe changé avec succès';
+ELSE IF @Result = -1
+    PRINT 'Utilisateur introuvable';
+ELSE IF @Result = -2
+    PRINT 'Ancien mot de passe incorrect';
+ELSE
+    PRINT 'Erreur système';
+=========================================*/
+
+
 /* ======= RÉSUMÉ DES PROCÉDURES =======
 
 1. usp_Reservation_Creer: Créer réservation avec validations complètes
@@ -527,5 +714,11 @@ EXEC dbo.usp_Rapport_Utilisateur @IdUtilisateur = 1;
 
 7. usp_Rapport_Utilisateur: Rapport complet d'un utilisateur
    Retourne 2 résultats: infos générales + réservations futures
+
+8. usp_Utilisateur_Modifier: Modifier pseudo et email avec vérification doublons
+   Retourne: 0=succès, -1=user introuvable, -2=pseudo déjà utilisé, -3=email déjà utilisé
+
+9. usp_Utilisateur_ChangerMotDePasse: Changer mot de passe après validation
+   Retourne: 0=succès, -1=user introuvable, -2=ancien mdp incorrect, -99=erreur
 
 =========================================*/

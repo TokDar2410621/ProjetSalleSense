@@ -1,0 +1,325 @@
+@page "/admin"
+@using SallseSense.Data
+@using SallseSense.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject ProtectedSessionStorage SessionStorage
+
+<h3>🔐 Administration - Gestion des utilisateurs</h3>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>Erreur :</strong> @errorMessage
+        <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>Succès :</strong> @successMessage
+        <button type="button" class="btn-close" @onclick="() => successMessage = null"></button>
+    </div>
+}
+
+@if (isLoading)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Chargement...</span>
+        </div>
+        <p class="mt-2">Chargement des utilisateurs...</p>
+    </div>
+}
+else if (!isAdmin)
+{
+    <div class="alert alert-danger">
+        <h4>⛔ Accès refusé</h4>
+        <p>Vous devez être administrateur pour accéder à cette page.</p>
+        <button class="btn btn-primary" @onclick="RetourDashboard">
+            Retour au Dashboard
+        </button>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">📋 Liste des utilisateurs</h5>
+        </div>
+        <div class="card-body">
+            @if (utilisateurs == null || !utilisateurs.Any())
+            {
+                <p class="text-muted">Aucun utilisateur trouvé.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Pseudo</th>
+                                <th>Email</th>
+                                <th>Rôle</th>
+                                <th>Statut</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var user in utilisateurs)
+                            {
+                                var isBlacklisted = blacklistedUserIds.Contains(user.IdUtilisateurPk);
+                                <tr class="@(isBlacklisted ? "table-danger" : "")">
+                                    <td>@user.IdUtilisateurPk</td>
+                                    <td>
+                                        <strong>@user.Pseudo</strong>
+                                        @if (user.IdUtilisateurPk == currentUserId)
+                                        {
+                                            <span class="badge bg-info ms-2">Vous</span>
+                                        }
+                                    </td>
+                                    <td>@user.Courriel</td>
+                                    <td>
+                                        @if (user.Role == "Admin")
+                                        {
+                                            <span class="badge bg-primary">👑 Admin</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">👤 User</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (isBlacklisted)
+                                        {
+                                            <span class="badge bg-danger">🚫 Blacklisté</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">✓ Actif</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (user.IdUtilisateurPk != currentUserId && user.Role != "Admin")
+                                        {
+                                            @if (isBlacklisted)
+                                            {
+                                                <button class="btn btn-sm btn-success" @onclick="() => RemoveFromBlacklist(user.IdUtilisateurPk)">
+                                                    ✓ Débloquer
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-danger" @onclick="() => AddToBlacklist(user.IdUtilisateurPk)">
+                                                    🚫 Blacklister
+                                                </button>
+                                            }
+                                        }
+                                        else if (user.IdUtilisateurPk == currentUserId)
+                                        {
+                                            <span class="text-muted small">Impossible de se blacklister soi-même</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">Admin protégé</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <h5>📊 Statistiques</h5>
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h3 class="text-primary">@utilisateurs.Count</h3>
+                        <p class="mb-0">Utilisateurs total</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h3 class="text-success">@utilisateurs.Count(u => u.Role == "Admin")</h3>
+                        <p class="mb-0">Administrateurs</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h3 class="text-info">@utilisateurs.Count(u => u.Role == "User")</h3>
+                        <p class="mb-0">Utilisateurs normaux</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h3 class="text-danger">@blacklistedUserIds.Count</h3>
+                        <p class="mb-0">Blacklistés</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Utilisateur> utilisateurs = new();
+    private HashSet<int> blacklistedUserIds = new();
+    private int currentUserId;
+    private bool isAdmin = false;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Récupérer l'ID de l'utilisateur connecté depuis la session
+            var userIdResult = await SessionStorage.GetAsync<int>("userId");
+            if (!userIdResult.Success || userIdResult.Value == 0)
+            {
+                NavigationManager.NavigateTo("/login");
+                return;
+            }
+
+            currentUserId = userIdResult.Value;
+
+            // Charger les données
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erreur lors du chargement : {ex.Message}";
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            // Vérifier si l'utilisateur est admin
+            var currentUser = await db.Utilisateurs.FindAsync(currentUserId);
+            if (currentUser == null)
+            {
+                NavigationManager.NavigateTo("/login");
+                return;
+            }
+
+            isAdmin = currentUser.Role == "Admin";
+
+            if (!isAdmin)
+            {
+                isLoading = false;
+                return;
+            }
+
+            // Charger tous les utilisateurs (sans mdp_salt/mdp_hash pour éviter SqlNullValueException)
+            utilisateurs = await db.Utilisateurs
+                .OrderBy(u => u.Pseudo)
+                .Select(u => new Utilisateur
+                {
+                    IdUtilisateurPk = u.IdUtilisateurPk,
+                    Pseudo = u.Pseudo,
+                    Courriel = u.Courriel,
+                    Role = u.Role
+                })
+                .ToListAsync();
+
+            // Charger les IDs des utilisateurs blacklistés
+            blacklistedUserIds = (await db.Blacklists
+                .Select(b => b.IdUtilisateur)
+                .ToListAsync())
+                .ToHashSet();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erreur lors du chargement des données : {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddToBlacklist(int userId)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            // Utiliser la procédure stockée usp_Utilisateur_Bannir
+            var pUserId = new Microsoft.Data.SqlClient.SqlParameter("@IdUtilisateur", userId);
+            var pNbReservations = new Microsoft.Data.SqlClient.SqlParameter
+            {
+                ParameterName = "@NbReservationsAnnulees",
+                SqlDbType = System.Data.SqlDbType.Int,
+                Direction = System.Data.ParameterDirection.Output
+            };
+
+            await db.Database.ExecuteSqlRawAsync(
+                "EXEC [dbo].[usp_Utilisateur_Bannir] @IdUtilisateur, @NbReservationsAnnulees OUTPUT",
+                pUserId, pNbReservations);
+
+            int nbReservationsAnnulees = (int)(pNbReservations.Value ?? 0);
+
+            successMessage = $"Utilisateur blacklisté avec succès. {nbReservationsAnnulees} réservation(s) annulée(s).";
+            errorMessage = null;
+
+            // Recharger les données
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erreur lors de l'ajout à la blacklist : {ex.Message}";
+        }
+    }
+
+    private async Task RemoveFromBlacklist(int userId)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            // Utiliser la procédure stockée usp_Utilisateur_Debloquer
+            var pUserId = new Microsoft.Data.SqlClient.SqlParameter("@IdUtilisateur", userId);
+
+            await db.Database.ExecuteSqlRawAsync(
+                "EXEC [dbo].[usp_Utilisateur_Debloquer] @IdUtilisateur",
+                pUserId);
+
+            successMessage = "Utilisateur débloqué avec succès.";
+            errorMessage = null;
+
+            // Recharger les données
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erreur lors du retrait de la blacklist : {ex.Message}";
+        }
+    }
+
+    private void RetourDashboard()
+    {
+        NavigationManager.NavigateTo("/dashboard");
+    }
+}

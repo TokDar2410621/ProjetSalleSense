@@ -1,6 +1,9 @@
 @page "/salles"
 @using SallseSense.Models
+@using SallseSense.Data
+@using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Authorization
+@inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
@@ -176,28 +179,52 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // TODO: Backend - Charger les salles depuis la base de données
-        LoadMockData();
+        await LoadSallesFromDatabase();
     }
 
-    private void LoadMockData()
+    private async Task LoadSallesFromDatabase()
     {
-        salles = new List<SalleDetailViewModel>();
-
-        for (int i = 1; i <= 25; i++)
+        try
         {
-            var batiment = (char)('A' + (i % 3));
-            var etage = (i % 4) + 1;
-            var numero = i % 10;
+            await using var db = await DbFactory.CreateDbContextAsync();
 
-            salles.Add(new SalleDetailViewModel
+            // Charger toutes les salles depuis la BD
+            var sallesDb = await db.Salles.ToListAsync();
+
+            salles = new List<SalleDetailViewModel>();
+
+            foreach (var salle in sallesDb)
             {
-                IdSallePk = i,
-                Numero = $"{batiment}-{etage}0{numero}",
-                CapaciteMaximale = 20 + (i % 4) * 10,
-                EstDisponible = i % 3 != 0,
-                ProchaineDisponibilite = i % 3 == 0 ? DateTime.Now.AddHours(2) : null
-            });
+                // Vérifier si la salle a une réservation en cours
+                var maintenant = DateTime.Now;
+                var reservationEnCours = await db.Reservations
+                    .Where(r => r.NoSalle == salle.IdSallePk &&
+                                r.HeureDebut <= maintenant &&
+                                r.HeureFin >= maintenant)
+                    .FirstOrDefaultAsync();
+
+                // Trouver la prochaine disponibilité si occupée
+                DateTime? prochaineDisponibilite = null;
+                if (reservationEnCours != null)
+                {
+                    prochaineDisponibilite = reservationEnCours.HeureFin;
+                }
+
+                salles.Add(new SalleDetailViewModel
+                {
+                    IdSallePk = salle.IdSallePk,
+                    Numero = salle.Numero,
+                    CapaciteMaximale = salle.CapaciteMaximale,
+                    EstDisponible = reservationEnCours == null,
+                    ProchaineDisponibilite = prochaineDisponibilite
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            // En cas d'erreur, afficher dans la console
+            Console.WriteLine($"Erreur lors du chargement des salles: {ex.Message}");
+            salles = new List<SalleDetailViewModel>();
         }
     }
 

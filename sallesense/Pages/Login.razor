@@ -2,10 +2,15 @@
 @using SallseSense.Models
 @using SallseSense.Services
 @using SallseSense.Authentication
+@using SallseSense.Data
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using Microsoft.EntityFrameworkCore
 @inject NavigationManager NavigationManager
 @inject AuthService AuthService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject ProtectedSessionStorage SessionStorage
+@inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
 
 <div class="container mt-5">
     <div class="row justify-content-center">
@@ -86,17 +91,33 @@
             return;
         }
 
-        // Connexion réussie - créer la session utilisateur
+        // Récupérer uniquement le pseudo et le rôle (sans charger mdp_salt/mdp_hash)
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var userInfo = await db.Utilisateurs
+            .Where(u => u.IdUtilisateurPk == userId)
+            .Select(u => new { u.Pseudo, u.Role })
+            .FirstOrDefaultAsync();
+
+        if (userInfo == null)
+        {
+            errorMessage = "Erreur lors de la récupération des informations utilisateur.";
+            return;
+        }
+
+        // Stocker l'ID utilisateur dans la session (pour NavMenu et autres pages)
+        await SessionStorage.SetAsync("userId", userId);
+
+        // Connexion réussie - créer la session utilisateur avec le vrai rôle
         var customAuthStateProvider = (CustomAuthenticationStateProvider)AuthStateProvider;
         await customAuthStateProvider.UpdateAuthenticationState(new UserSession
         {
-            UserName = loginModel.Courriel,
+            UserName = userInfo.Pseudo,
             UserId = userId,
-            Role = "Utilisateur" // Par défaut, tous les utilisateurs ont le rôle "Utilisateur"
+            Role = userInfo.Role ?? "User" // Utiliser le rôle de la BD ou "User" par défaut
         });
 
-        // Rediriger vers le dashboard
-        NavigationManager.NavigateTo("/dashboard", true);
+        // Rediriger vers le dashboard (sans forceLoad pour conserver l'état d'authentification)
+        NavigationManager.NavigateTo("/dashboard", false);
     }
 
     // Model pour le login

@@ -683,3 +683,9 @@ FodyWeavers.xsd
 # Additional files built by Visual Studio
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,visualstudiocode,jetbrains+all,python,windows,macos
+
+# SalleSense - Custom ignores
+# Configuration files with potential passwords/credentials
+sallesense/appsettings.School.json
+sallesense/appsetting.Home.json
+pythonRAs/db_config.json

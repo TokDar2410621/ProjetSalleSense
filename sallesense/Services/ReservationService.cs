@@ -72,26 +72,25 @@ namespace SallseSense.Services
                 var pHeureFin = new SqlParameter("@HeureFin", SqlDbType.DateTime2) { Value = heureFin };
                 var pNombrePersonnes = new SqlParameter("@NombrePersonnes", SqlDbType.Int) { Value = nombrePersonnes };
 
-                // Paramètre de sortie (OUTPUT)
+                // Paramètres de sortie (OUTPUT)
                 var pIdReservation = new SqlParameter("@IdReservation", SqlDbType.Int)
                 {
                     Direction = ParameterDirection.Output
                 };
 
-                // Paramètre de retour (RETURN)
-                var ret = new SqlParameter("@RETURN_VALUE", SqlDbType.Int)
+                var pCodeStatut = new SqlParameter("@CodeStatut", SqlDbType.Int)
                 {
-                    Direction = ParameterDirection.ReturnValue
+                    Direction = ParameterDirection.Output
                 };
 
                 // Exécution de la procédure stockée
-                var sql = "EXEC @RETURN_VALUE = dbo.usp_Reservation_Creer @IdUtilisateur, @IdSalle, @HeureDebut, @HeureFin, @NombrePersonnes, @IdReservation OUTPUT";
+                await db.Database.ExecuteSqlRawAsync(
+                    "EXEC dbo.usp_Reservation_Creer @IdUtilisateur, @IdSalle, @HeureDebut, @HeureFin, @NombrePersonnes, @IdReservation OUTPUT, @CodeStatut OUTPUT",
+                    pIdUtilisateur, pIdSalle, pHeureDebut, pHeureFin, pNombrePersonnes, pIdReservation, pCodeStatut);
 
-                await db.Database.ExecuteSqlRawAsync(sql, ret, pIdUtilisateur, pIdSalle, pHeureDebut, pHeureFin, pNombrePersonnes, pIdReservation);
-
-                // Récupération des résultats
-                int returnCode = (int)(ret.Value ?? -99);
+                // Récupération du résultat
                 int reservationId = pIdReservation.Value != DBNull.Value ? (int)pIdReservation.Value : -1;
+                int returnCode = pCodeStatut.Value != DBNull.Value ? (int)pCodeStatut.Value : -99;
 
                 // Interprétation du code de retour
                 return returnCode switch

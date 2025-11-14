@@ -1,5 +1,11 @@
 @using SallseSense.Authentication
+@using SallseSense.Data
+@using SallseSense.Models
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using Microsoft.EntityFrameworkCore
+@inject ProtectedSessionStorage SessionStorage
+@inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
 
 <div class="top-row pl-4 navbar navbar-dark">
     <a class="navbar-brand" href="">SalleSense</a>
@@ -36,6 +42,19 @@
             </NavLink>
         </li>
 
+        @* Lien Admin - visible seulement pour les admins *@
+        @if (isAdmin)
+        {
+            <li class="nav-item px-3 mt-3">
+                <div class="nav-section-title text-muted small px-3">ADMINISTRATION</div>
+            </li>
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="admin">
+                    <span class="oi oi-shield" aria-hidden="true"></span> Gestion Utilisateurs
+                </NavLink>
+            </li>
+        }
+
         <li class="nav-item px-3 mt-3">
             <div class="nav-section-title text-muted small px-3">COMPTE</div>
         </li>
@@ -43,9 +62,9 @@
         <AuthorizeView>
             <Authorized>
                 <li class="nav-item px-3">
-                    <div class="nav-link text-light">
+                    <NavLink class="nav-link" href="profil">
                         <span class="oi oi-person" aria-hidden="true"></span> @context.User.Identity.Name
-                    </div>
+                    </NavLink>
                 </li>
                 <li class="nav-item px-3">
                     <a class="nav-link" href="#" @onclick="HandleLogout" @onclick:preventDefault>
@@ -71,6 +90,7 @@
 
 @code {
     private bool collapseNavMenu = true;
+    private bool isAdmin = false;
 
     private string NavMenuCssClass => collapseNavMenu ? "collapse" : null;
 
@@ -84,6 +104,29 @@
 
     [Inject]
     private NavigationManager NavigationManager { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckIfAdmin();
+    }
+
+    private async Task CheckIfAdmin()
+    {
+        try
+        {
+            var userIdResult = await SessionStorage.GetAsync<int>("userId");
+            if (userIdResult.Success && userIdResult.Value > 0)
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var user = await db.Utilisateurs.FindAsync(userIdResult.Value);
+                isAdmin = user?.Role == "Admin";
+            }
+        }
+        catch
+        {
+            isAdmin = false;
+        }
+    }
 
     private async Task HandleLogout()
     {

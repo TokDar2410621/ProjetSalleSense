@@ -1,6 +1,9 @@
 @page "/salle/{Id:int}"
 @using SallseSense.Models
+@using SallseSense.Data
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
@@ -259,50 +262,82 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // TODO: Backend - Charger les détails de la salle depuis la base de données
-        // - Charger la salle avec Id
-        // - Charger les réservations du jour
-        // - Charger l'historique des activités
-        // - Charger les photos d'archive
-        // - Charger les capteurs associés
-
-        LoadMockData();
+        await LoadDataFromDatabase();
     }
 
-    private void LoadMockData()
+    private async Task LoadDataFromDatabase()
     {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Charger la salle depuis la BD
+        var salleBd = await db.Salles.FindAsync(Id);
+        if (salleBd == null) return;
+
+        var maintenant = DateTime.Now;
+        var aujourdhui = DateTime.Today;
+        var demain = aujourdhui.AddDays(1);
+
         salle = new SalleDetailViewModel
         {
-            IdSallePk = Id,
-            Numero = $"A-{100 + Id}",
-            CapaciteMaximale = 30,
-            EstDisponible = Id % 2 == 0
+            IdSallePk = salleBd.IdSallePk,
+            Numero = salleBd.Numero,
+            CapaciteMaximale = salleBd.CapaciteMaximale,
+            EstDisponible = !await db.Reservations.AnyAsync(r =>
+                r.NoSalle == Id &&
+                r.HeureDebut <= maintenant &&
+                r.HeureFin >= maintenant)
         };
 
-        reservationsDuJour = new List<ReservationViewModel>
-        {
-            new ReservationViewModel { HeureDebut = DateTime.Today.AddHours(9), HeureFin = DateTime.Today.AddHours(11), NombrePersonne = 25, EstEnCours = false },
-            new ReservationViewModel { HeureDebut = DateTime.Today.AddHours(14), HeureFin = DateTime.Today.AddHours(16), NombrePersonne = 30, EstEnCours = true },
-        };
+        // Charger les réservations du jour
+        var resDuJour = await db.Reservations
+            .Where(r => r.NoSalle == Id && r.HeureDebut >= aujourdhui && r.HeureDebut < demain)
+            .OrderBy(r => r.HeureDebut)
+            .ToListAsync();
 
-        activitesRecentes = new List<ActiviteViewModel>
+        reservationsDuJour = resDuJour.Select(r => new ReservationViewModel
         {
-            new ActiviteViewModel { Type = "Réservation créée", Description = "Réservation pour 25 personnes", DateHeure = DateTime.Now.AddHours(-2) },
-            new ActiviteViewModel { Type = "Capteur activé", Description = "Capteur de température activé", DateHeure = DateTime.Now.AddHours(-5) },
-        };
+            HeureDebut = r.HeureDebut,
+            HeureFin = r.HeureFin,
+            NombrePersonne = r.NombrePersonne,
+            EstEnCours = r.HeureDebut <= maintenant && r.HeureFin >= maintenant
+        }).ToList();
 
-        photosArchive = new List<PhotoViewModel>
-        {
-            new PhotoViewModel { DateHeure = DateTime.Now.AddDays(-1) },
-            new PhotoViewModel { DateHeure = DateTime.Now.AddDays(-2) },
-            new PhotoViewModel { DateHeure = DateTime.Now.AddDays(-3) },
-        };
+        // Charger les dernières réservations (activités récentes)
+        var dernieresRes = await db.Reservations
+            .Where(r => r.NoSalle == Id)
+            .OrderByDescending(r => r.HeureDebut)
+            .Take(5)
+            .ToListAsync();
 
-        capteurs = new List<CapteurViewModel>
+        activitesRecentes = dernieresRes.Select(r => new ActiviteViewModel
         {
-            new CapteurViewModel { Nom = "Temp-01", Type = "Température", EstActif = true, DerniereMesure = 22.5 },
-            new CapteurViewModel { Nom = "Motion-01", Type = "Mouvement", EstActif = true, DerniereMesure = null },
-        };
+            Type = "Réservation",
+            Description = $"Réservation pour {r.NombrePersonne} personnes",
+            DateHeure = r.HeureDebut
+        }).ToList();
+
+        // Charger les photos depuis la table Donnees (photoBlob)
+        var photos = await db.Donnees
+            .Where(d => d.NoSalle == Id && d.PhotoBlob != null)
+            .OrderByDescending(d => d.DateHeure)
+            .Take(10)
+            .ToListAsync();
+
+        photosArchive = photos.Select(p => new PhotoViewModel
+        {
+            DateHeure = p.DateHeure
+        }).ToList();
+
+        // Charger tous les capteurs
+        var capteursBd = await db.Capteurs.ToListAsync();
+
+        capteurs = capteursBd.Select(c => new CapteurViewModel
+        {
+            Nom = c.Nom,
+            Type = c.Type,
+            EstActif = true,
+            DerniereMesure = null
+        }).ToList();
     }
 
     public class SalleDetailViewModel

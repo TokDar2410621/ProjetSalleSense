@@ -35,4 +35,8 @@ public partial class Utilisateur
     [Column("mdp_hash")]
     [MaxLength(32)]
     public byte[] MdpHash { get; set; }
+
+    [Column("role")]
+    [StringLength(20)]
+    public string? Role { get; set; }
 }

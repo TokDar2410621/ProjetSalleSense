@@ -279,7 +279,7 @@
 
         if (user.Identity?.IsAuthenticated == true)
         {
-            var userIdClaim = user.FindFirst("UserId");
+            var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
             if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
             {
                 currentUserId = userId;

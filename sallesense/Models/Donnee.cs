@@ -21,12 +21,8 @@ public partial class Donnee
     [Column("mesure")]
     public double? Mesure { get; set; }
 
-    [Column("photo")]
-    [StringLength(255)]
-    public string Photo { get; set; }
-
     [Column("photoBlob")]
-    public byte[] PhotoBlob { get; set; }
+    public byte[]? PhotoBlob { get; set; }
 
     [Column("noSalle")]
     public int NoSalle { get; set; }

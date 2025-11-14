@@ -6,7 +6,7 @@ ALTER TABLE Donnees
 ADD photoBlob VARBINARY(MAX) NULL;
 GO
 ALTER TABLE Donnees
-DROP COLUMN photo NVARCHAR(255) NULL;
+DROP COLUMN photo ;
 GO
 -- Optionnel : garder 'photo' pour le nom/métadonnées ou la supprimer
 -- Si vous voulez garder le nom du fichier :

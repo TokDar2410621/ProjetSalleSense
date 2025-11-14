@@ -11,11 +11,15 @@ namespace SallseSense.Authentication
     /// </summary>
     public class CustomAuthenticationStateProvider : AuthenticationStateProvider
     {
+        private readonly ProtectedLocalStorage _localStorage;
         private readonly ProtectedSessionStorage _sessionStorage;
         private ClaimsPrincipal _anonymous = new ClaimsPrincipal(new ClaimsIdentity());
 
-        public CustomAuthenticationStateProvider(ProtectedSessionStorage sessionStorage)
+        public CustomAuthenticationStateProvider(
+            ProtectedLocalStorage localStorage,
+            ProtectedSessionStorage sessionStorage)
         {
+            _localStorage = localStorage;
             _sessionStorage = sessionStorage;
         }
 
@@ -27,8 +31,29 @@ namespace SallseSense.Authentication
             var claimsPrincipal = _anonymous;
             try
             {
-                var userSessionStorageResult = await _sessionStorage.GetAsync<UserSession>("UserSession");
-                var userSession = userSessionStorageResult.Success ? userSessionStorageResult.Value : null;
+                // Essayer d'abord SessionStorage (disponible immédiatement)
+                var sessionResult = await _sessionStorage.GetAsync<UserSession>("UserSession");
+                var userSession = sessionResult.Success ? sessionResult.Value : null;
+
+                // Si pas trouvé dans SessionStorage, essayer LocalStorage
+                if (userSession == null)
+                {
+                    try
+                    {
+                        var localResult = await _localStorage.GetAsync<UserSession>("UserSession");
+                        userSession = localResult.Success ? localResult.Value : null;
+
+                        // Si trouvé dans LocalStorage, remettre dans SessionStorage
+                        if (userSession != null)
+                        {
+                            await _sessionStorage.SetAsync("UserSession", userSession);
+                        }
+                    }
+                    catch
+                    {
+                        // LocalStorage pas encore disponible (prerender), ignorer
+                    }
+                }
 
                 if (userSession != null)
                 {
@@ -58,8 +83,9 @@ namespace SallseSense.Authentication
 
             if (userSession != null)
             {
-                // Connexion - créer les claims
-                await _sessionStorage.SetAsync("UserSession", userSession);
+                // Connexion - créer les claims et sauvegarder dans LocalStorage ET SessionStorage
+                await _localStorage.SetAsync("UserSession", userSession);
+                await _sessionStorage.SetAsync("UserSession", userSession); // SessionStorage pour compatibilité
                 claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new List<Claim>
                 {
                     new Claim(ClaimTypes.Name, userSession.UserName),
@@ -69,7 +95,8 @@ namespace SallseSense.Authentication
             }
             else
             {
-                // Déconnexion - supprimer la session
+                // Déconnexion - supprimer la session des deux storages
+                await _localStorage.DeleteAsync("UserSession");
                 await _sessionStorage.DeleteAsync("UserSession");
                 claimsPrincipal = _anonymous;
             }
