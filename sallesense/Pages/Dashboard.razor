@@ -1,9 +1,5 @@
 @page "/dashboard"
-@using SallseSense.Models
-@using SallseSense.Data
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.EntityFrameworkCore
-@inject IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
@@ -49,7 +45,15 @@
     <!-- Section Statistiques -->
     <div class="row mb-4">
         <div class="col-md-12">
-            <h4>Statistiques</h4>
+            <div class="d-flex justify-content-between align-items-center">
+                <h4>Statistiques</h4>
+                <div>
+                    <small class="text-muted me-3">Dernière mise à jour: @derniereMiseAJour.ToString("HH:mm:ss")</small>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="RafraichirDonnees" disabled="@isRefreshing">
+                        <span class="oi oi-reload"></span> @(isRefreshing ? "Rafraîchissement..." : "Rafraîchir")
+                    </button>
+                </div>
+            </div>
         </div>
         <div class="col-md-4">
             <div class="card bg-primary text-white">
@@ -196,86 +200,3 @@
         </div>
     }
 </div>
-
-@code {
-    private string filtreType = "all";
-    private string rechercheTexte = string.Empty;
-    private int? capaciteMin = null;
-    private DateTime? dateFiltre = null;
-    private bool vueGrille = true;
-
-    // Statistiques
-    private int nombreSallesActives = 0;
-    private int nombreReservations = 0;
-    private int nombreSallesDisponibles = 0;
-
-    // Listes
-    private List<SalleViewModel> salles = new();
-    private List<ActiviteViewModel> dernieresActivites = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadDataFromDatabase();
-    }
-
-    private async Task LoadDataFromDatabase()
-    {
-        await using var db = await DbFactory.CreateDbContextAsync();
-
-        // Charger toutes les salles depuis la BD
-        var sallesBd = await db.Salles.ToListAsync();
-        var maintenant = DateTime.Now;
-
-        salles = sallesBd.Select(s => new SalleViewModel
-        {
-            IdSallePk = s.IdSallePk,
-            Numero = s.Numero,
-            CapaciteMaximale = s.CapaciteMaximale,
-            // Vérifier si la salle est disponible (pas de réservation en cours)
-            EstDisponible = !db.Reservations.Any(r =>
-                r.NoSalle == s.IdSallePk &&
-                r.HeureDebut <= maintenant &&
-                r.HeureFin >= maintenant),
-            MoniteurActif = db.Capteurs.Any() // Au moins un capteur existe dans le système
-        }).ToList();
-
-        // Calculer les statistiques
-        nombreSallesActives = sallesBd.Count;
-        nombreReservations = await db.Reservations
-            .Where(r => r.HeureDebut >= maintenant)
-            .CountAsync();
-        nombreSallesDisponibles = salles.Count(s => s.EstDisponible);
-
-        // Charger les dernières activités (dernières réservations)
-        var dernieresRes = await db.Reservations
-            .OrderByDescending(r => r.HeureDebut)
-            .Take(5)
-            .ToListAsync();
-
-        dernieresActivites = dernieresRes.Select(r => new ActiviteViewModel
-        {
-            Type = "Réservation",
-            NomSalle = db.Salles.FirstOrDefault(s => s.IdSallePk == r.NoSalle)?.Numero ?? "Inconnue",
-            DateHeure = r.HeureDebut,
-            Status = r.HeureFin < maintenant ? "Terminée" : (r.HeureDebut <= maintenant ? "En cours" : "À venir")
-        }).ToList();
-    }
-
-    // View Models
-    public class SalleViewModel
-    {
-        public int IdSallePk { get; set; }
-        public string Numero { get; set; } = string.Empty;
-        public int CapaciteMaximale { get; set; }
-        public bool EstDisponible { get; set; }
-        public bool MoniteurActif { get; set; }
-    }
-
-    public class ActiviteViewModel
-    {
-        public string Type { get; set; } = string.Empty;
-        public string NomSalle { get; set; } = string.Empty;
-        public DateTime DateHeure { get; set; }
-        public string Status { get; set; } = string.Empty;
-    }
-}
