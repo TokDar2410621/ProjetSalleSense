@@ -48,17 +48,25 @@ class InterfacePrincipaleModerne:
         # Variables de contrôle
         self.en_cours = True
         self.auto_refresh = tk.BooleanVar(value=True)
-        self.refresh_interval = 2000  # ms
+        self.refresh_interval = 500  # ms - Rafraîchissement plus rapide pour animation fluide
 
         # Données
         self.derniere_mesure_son = None
         self.derniere_photo = None
+
+        # Animation de la barre de son
+        self.niveau_son_actuel = 0
+        self.niveau_son_cible = 0
+        self.historique_son = []  # Historique des 50 dernières valeurs pour forme d'onde
 
         # Créer l'interface
         self.creer_interface()
 
         # Lancer le rafraîchissement automatique
         self.rafraichir_donnees()
+
+        # Lancer l'animation de la barre de son
+        self.animer_barre_son()
 
         # Gérer la fermeture
         self.root.protocol("WM_DELETE_WINDOW", self.fermer)
@@ -216,16 +224,27 @@ class InterfacePrincipaleModerne:
                                         bg=self.colors['card'])
         self.son_value_label.pack(pady=10)
 
-        # Barre de progression moderne
-        self.son_progress_frame = tk.Frame(son_content, bg=self.colors['border'],
-                                          height=30, relief=tk.FLAT)
-        self.son_progress_frame.pack(fill=tk.X, pady=10)
-        self.son_progress_frame.pack_propagate(False)
+        # Canvas pour barre de son animée
+        self.son_canvas = tk.Canvas(son_content, bg=self.colors['border'],
+                                   height=40, highlightthickness=0)
+        self.son_canvas.pack(fill=tk.X, pady=10)
 
-        self.son_progress_bar = tk.Frame(self.son_progress_frame,
-                                         bg=self.colors['primary'],
-                                         width=0)
-        self.son_progress_bar.place(x=0, y=0, relheight=1.0)
+        # Créer les éléments de la barre
+        self.son_barre_id = None
+        self.son_pics_ids = []  # IDs des pics d'amplitude
+
+        # Label de seuils
+        seuils_frame = tk.Frame(son_content, bg=self.colors['card'])
+        seuils_frame.pack(fill=tk.X, pady=5)
+
+        tk.Label(seuils_frame, text="0 dB", font=('Arial', 8),
+                fg=self.colors['gray'], bg=self.colors['card']).pack(side=tk.LEFT)
+        tk.Label(seuils_frame, text="50 dB", font=('Arial', 8),
+                fg=self.colors['success'], bg=self.colors['card']).pack(side=tk.LEFT, padx=50)
+        tk.Label(seuils_frame, text="70 dB", font=('Arial', 8),
+                fg=self.colors['warning'], bg=self.colors['card']).pack(side=tk.LEFT, padx=50)
+        tk.Label(seuils_frame, text="100 dB", font=('Arial', 8),
+                fg=self.colors['danger'], bg=self.colors['card']).pack(side=tk.RIGHT)
 
         self.son_time_label = tk.Label(son_content, text="Aucune donnée",
                                        font=('Arial', 10),
@@ -669,6 +688,96 @@ class InterfacePrincipaleModerne:
                     fg=self.colors['danger'],
                     bg=self.colors['card']).pack(pady=50)
 
+    def animer_barre_son(self):
+        """Anime la barre de son avec transition fluide"""
+        if not self.en_cours:
+            return
+
+        try:
+            # Interpolation fluide vers la valeur cible
+            diff = self.niveau_son_cible - self.niveau_son_actuel
+            if abs(diff) > 0.5:
+                # Animation progressive
+                self.niveau_son_actuel += diff * 0.3
+            else:
+                self.niveau_son_actuel = self.niveau_son_cible
+
+            # Récupérer la largeur du canvas
+            canvas_width = self.son_canvas.winfo_width()
+            if canvas_width <= 1:
+                canvas_width = 400  # Valeur par défaut
+
+            canvas_height = 40
+
+            # Effacer le canvas
+            self.son_canvas.delete("all")
+
+            # Dessiner les zones de fond (seuils)
+            width_50 = int(canvas_width * 0.5)
+            width_70 = int(canvas_width * 0.7)
+
+            # Zone verte (0-50 dB)
+            self.son_canvas.create_rectangle(0, 0, width_50, canvas_height,
+                                            fill='#d1fae5', outline='')
+            # Zone orange (50-70 dB)
+            self.son_canvas.create_rectangle(width_50, 0, width_70, canvas_height,
+                                            fill='#fed7aa', outline='')
+            # Zone rouge (70-100 dB)
+            self.son_canvas.create_rectangle(width_70, 0, canvas_width, canvas_height,
+                                            fill='#fecaca', outline='')
+
+            # Calculer la largeur de la barre actuelle
+            bar_width = int((min(100, self.niveau_son_actuel) / 100) * canvas_width)
+
+            # Choisir la couleur selon le niveau
+            if self.niveau_son_actuel > 70:
+                bar_color = self.colors['danger']
+            elif self.niveau_son_actuel > 50:
+                bar_color = self.colors['warning']
+            else:
+                bar_color = self.colors['success']
+
+            # Dessiner la barre principale avec dégradé (effet de brillance)
+            if bar_width > 0:
+                # Barre principale
+                self.son_canvas.create_rectangle(0, 0, bar_width, canvas_height,
+                                                fill=bar_color, outline='')
+
+                # Effet de brillance (gradient supérieur)
+                gradient_height = int(canvas_height * 0.4)
+                self.son_canvas.create_rectangle(0, 0, bar_width, gradient_height,
+                                                fill='white', outline='', stipple='gray50')
+
+                # Bordure de la barre
+                self.son_canvas.create_rectangle(0, 0, bar_width, canvas_height,
+                                                outline=bar_color, width=2)
+
+            # Ajouter des marqueurs de seuils
+            # Ligne à 50 dB
+            line_50 = int(canvas_width * 0.5)
+            self.son_canvas.create_line(line_50, 0, line_50, canvas_height,
+                                       fill=self.colors['success'], width=2, dash=(5, 5))
+
+            # Ligne à 70 dB
+            line_70 = int(canvas_width * 0.7)
+            self.son_canvas.create_line(line_70, 0, line_70, canvas_height,
+                                       fill=self.colors['danger'], width=2, dash=(5, 5))
+
+            # Ajouter des pics d'amplitude si le son est fort
+            if self.niveau_son_actuel > 60:
+                import random
+                for _ in range(3):
+                    x = random.randint(0, max(1, bar_width - 5))
+                    self.son_canvas.create_oval(x, 5, x+10, 15,
+                                               fill='white', outline='', stipple='gray25')
+
+        except Exception as e:
+            print(f"Erreur animation barre son: {e}")
+
+        # Répéter l'animation (60 FPS = ~16ms)
+        if self.en_cours:
+            self.root.after(16, self.animer_barre_son)
+
     def rafraichir_donnees(self):
         """Rafraîchit les données affichées"""
         if not self.en_cours:
@@ -692,23 +801,21 @@ class InterfacePrincipaleModerne:
                     self.son_value_label.config(text=f"{niveau:.1f} dB")
                     self.son_time_label.config(text=f"Dernière mesure: {date.strftime('%H:%M:%S')}")
 
-                    # Animer la barre de progression
-                    progress_width = min(100, niveau)
-                    total_width = self.son_progress_frame.winfo_width()
-                    bar_width = int((progress_width / 100) * total_width)
+                    # Mettre à jour la cible pour l'animation
+                    self.niveau_son_cible = niveau
 
-                    self.son_progress_bar.config(width=bar_width)
+                    # Ajouter à l'historique
+                    self.historique_son.append(niveau)
+                    if len(self.historique_son) > 50:
+                        self.historique_son.pop(0)
 
                     # Couleur selon le niveau
                     if niveau > 70:
                         self.son_value_label.config(fg=self.colors['danger'])
-                        self.son_progress_bar.config(bg=self.colors['danger'])
                     elif niveau > 50:
                         self.son_value_label.config(fg=self.colors['warning'])
-                        self.son_progress_bar.config(bg=self.colors['warning'])
                     else:
                         self.son_value_label.config(fg=self.colors['success'])
-                        self.son_progress_bar.config(bg=self.colors['success'])
 
                 # Compter les médias
                 media_count = self.db.execute_query("""
