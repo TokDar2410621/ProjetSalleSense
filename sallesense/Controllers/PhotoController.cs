@@ -26,7 +26,7 @@ namespace SallseSense.Controllers
         /// GET: api/photo/5
         /// </summary>
         /// <param name="id">ID de la donnée contenant la photo</param>
-        /// <returns>Image JPEG</returns>
+        /// <returns>Image JPEG ou PNG</returns>
         [HttpGet("{id}")]
         public async Task<IActionResult> GetPhoto(int id)
         {
@@ -38,8 +38,28 @@ namespace SallseSense.Controllers
                 return NotFound();
             }
 
+            // Détecter le type d'image selon les magic bytes
+            string contentType = "image/jpeg"; // Par défaut
+
+            if (photoBytes.Length >= 8)
+            {
+                // Vérifier signature PNG (89 50 4E 47 0D 0A 1A 0A)
+                if (photoBytes[0] == 0x89 && photoBytes[1] == 0x50 &&
+                    photoBytes[2] == 0x4E && photoBytes[3] == 0x47)
+                {
+                    contentType = "image/png";
+                }
+                // Vérifier signature JPEG (FF D8)
+                else if (photoBytes[0] == 0xFF && photoBytes[1] == 0xD8)
+                {
+                    contentType = "image/jpeg";
+                }
+            }
+
+            _logger.LogInformation($"Photo {id} servie - Type: {contentType}, Taille: {photoBytes.Length} bytes");
+
             // Retourner l'image avec le bon Content-Type
-            return File(photoBytes, "image/jpeg");
+            return File(photoBytes, contentType);
         }
 
         /// <summary>

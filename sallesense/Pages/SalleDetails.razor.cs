@@ -85,10 +85,13 @@ namespace SallseSense.Pages
                 .Take(10)
                 .ToListAsync();
 
-            photosArchive = photos.Select(p => new PhotoViewModel
-            {
-                DateHeure = p.DateHeure
-            }).ToList();
+            photosArchive = photos
+                .Where(p => p.PhotoBlob != null && p.PhotoBlob.Length > 0)
+                .Select(p => new PhotoViewModel
+                {
+                    IdDonnee = p.IdDonneePk,
+                    DateHeure = p.DateHeure
+                }).ToList();
 
             // Charger tous les capteurs
             var capteursBd = await db.Capteurs.ToListAsync();
@@ -127,6 +130,7 @@ namespace SallseSense.Pages
 
         public class PhotoViewModel
         {
+            public int IdDonnee { get; set; }
             public DateTime DateHeure { get; set; }
         }
 

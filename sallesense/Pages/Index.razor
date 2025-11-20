@@ -1,38 +1,515 @@
-﻿@page "/"
-@using Microsoft.AspNetCore.Hosting
-@using Microsoft.Extensions.Configuration
-@inject IWebHostEnvironment Env
-@inject IConfiguration Config
+@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
 
-<h1>Hello, world!</h1>
+<PageTitle>Accueil - SalleSense</PageTitle>
 
-Welcome to your new app.
+<!-- Hero Section -->
+<div class="hero-section fade-in">
+    <div class="hero-content">
+        <div class="hero-badge">
+            <span class="oi oi-home"></span> Système de Gestion Intelligent
+        </div>
+        <h1 class="hero-title">
+            Bienvenue sur <span style="color: white; text-shadow: 2px 2px 8px rgba(0,0,0,0.3);">SalleSense</span>
+        </h1>
+        
+        <p class="hero-subtitle">
+            Gérez vos réservations de salles avec intelligence et simplicité.
+            Surveillance IoT en temps réel, statistiques avancées et interface moderne.
+        </p>
 
-<div class="alert alert-info mt-3">
-    <h4>🔍 Configuration actuelle :</h4>
-    <ul>
-        <li><strong>Environnement :</strong> @Env.EnvironmentName</li>
-        <li><strong>Serveur BD :</strong> @GetServerName()</li>
-    </ul>
+        <AuthorizeView>
+            <Authorized>
+                <div class="hero-actions">
+                    <a href="/dashboard" class="btn btn-primary btn-lg">
+                        <span class="oi oi-dashboard"></span> Accéder au Dashboard
+                    </a>
+                    <a href="/reservation/creer" class="btn btn-light btn-lg">
+                        <span class="oi oi-calendar"></span> Nouvelle Réservation
+                    </a>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="hero-actions">
+                    <a href="/login" class="btn btn-primary btn-lg">
+                        <span class="oi oi-account-login"></span> Se Connecter
+                    </a>
+                    <a href="/register" class="btn btn-light btn-lg">
+                        <span class="oi oi-person"></span> Créer un Compte
+                    </a>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+
+    <div class="hero-illustration">
+        <div class="floating-card card-1">
+            <span class="oi oi-calendar"></span>
+            <span>Réservations</span>
+        </div>
+        <div class="floating-card card-2">
+            <span class="oi oi-camera-slr"></span>
+            <span>Surveillance</span>
+        </div>
+        <div class="floating-card card-3">
+            <span class="oi oi-graph"></span>
+            <span>Statistiques</span>
+        </div>
+    </div>
 </div>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+<!-- Features Section -->
+<div class="features-section">
+    <div class="container-fluid">
+        <div class="section-header text-center mb-5">
+            <h2 class="section-title">Fonctionnalités Principales</h2>
+            <p class="section-subtitle">Tout ce dont vous avez besoin pour gérer vos espaces efficacement</p>
+        </div>
 
-@code {
-    private string GetServerName()
-    {
-        var connectionString = Config.GetConnectionString("DefaultConnection");
-        if (string.IsNullOrEmpty(connectionString))
-            return "Non configuré";
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <div class="feature-icon bg-primary">
+                        <span class="oi oi-calendar"></span>
+                    </div>
+                    <h3>Réservations Simples</h3>
+                    <p>Réservez vos salles en quelques clics avec un calendrier intuitif et des confirmations instantanées.</p>
+                </div>
+            </div>
 
-        // Extraire le nom du serveur de la chaîne de connexion
-        var serverStart = connectionString.IndexOf("Server=");
-        if (serverStart < 0) return "Inconnu";
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <div class="feature-icon bg-success">
+                        <span class="oi oi-camera-slr"></span>
+                    </div>
+                    <h3>Surveillance IoT</h3>
+                    <p>Capteurs intelligents pour surveiller l'occupation, le bruit et capturer des photos en temps réel.</p>
+                </div>
+            </div>
 
-        serverStart += 7; // Longueur de "Server="
-        var serverEnd = connectionString.IndexOf(";", serverStart);
-        if (serverEnd < 0) return "Inconnu";
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <div class="feature-icon bg-warning">
+                        <span class="oi oi-graph"></span>
+                    </div>
+                    <h3>Statistiques Avancées</h3>
+                    <p>Visualisez l'utilisation de vos salles avec des graphiques et rapports détaillés.</p>
+                </div>
+            </div>
 
-        return connectionString.Substring(serverStart, serverEnd - serverStart);
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <div class="feature-icon bg-danger">
+                        <span class="oi oi-shield"></span>
+                    </div>
+                    <h3>Gestion Sécurisée</h3>
+                    <p>Authentification robuste, gestion des permissions et blacklist pour utilisateurs problématiques.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Section -->
+<div class="stats-section">
+    <div class="container-fluid">
+        <div class="row g-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-box">
+                    <div class="stat-icon">
+                        <span class="oi oi-home"></span>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value">@nombreSalles</div>
+                        <div class="stat-label">Salles Disponibles</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-box">
+                    <div class="stat-icon success">
+                        <span class="oi oi-calendar"></span>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value">@nombreReservations</div>
+                        <div class="stat-label">Réservations Actives</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-box">
+                    <div class="stat-icon warning">
+                        <span class="oi oi-people"></span>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value">@nombreUtilisateurs</div>
+                        <div class="stat-label">Utilisateurs Actifs</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-box">
+                    <div class="stat-icon danger">
+                        <span class="oi oi-camera-slr"></span>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value">@nombrePhotos</div>
+                        <div class="stat-label">Photos Capturées</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CTA Section -->
+<div class="cta-section">
+    <div class="cta-content">
+        <h2>Prêt à commencer?</h2>
+        <p>Rejoignez SalleSense dès aujourd'hui et profitez d'une gestion de salles moderne et efficace.</p>
+
+        <AuthorizeView>
+            <Authorized>
+                <a href="/salles" class="btn btn-light btn-lg">
+                    <span class="oi oi-list"></span> Voir Toutes les Salles
+                </a>
+            </Authorized>
+            <NotAuthorized>
+                <a href="/register" class="btn btn-light btn-lg">
+                    <span class="oi oi-person"></span> Créer un Compte 
+                </a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+<style>
+    /* Hero Section */
+    .hero-section {
+        min-height: 600px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4rem 2rem;
+        margin: -2rem -1.5rem 3rem -2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
     }
-}
+
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+        background-size: 50px 50px;
+        animation: moveBackground 20s linear infinite;
+    }
+
+    @@keyframes moveBackground {
+        0% { transform: translate(0, 0); }
+        100% { transform: translate(50px, 50px); }
+    }
+
+    .hero-content {
+        max-width: 600px;
+        z-index: 1;
+    }
+
+    .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 0.5rem 1rem;
+        border-radius: 2rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 1.5rem;
+        backdrop-filter: blur(10px);
+    }
+
+    .hero-title {
+        font-size: 3.5rem;
+        font-weight: 800;
+        line-height: 1.2;
+        margin-bottom: 1.5rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1.25rem;
+        opacity: 0.95;
+        margin-bottom: 2rem;
+        line-height: 1.6;
+    }
+
+    .hero-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .hero-illustration {
+        position: relative;
+        width: 450px;
+        height: 450px;
+        z-index: 1;
+        display: none; /* Caché par défaut */
+        flex-shrink: 0;
+    }
+
+    @@media (min-width: 1400px) {
+        .hero-illustration {
+            display: block; /* Visible seulement sur très grand écran */
+        }
+    }
+
+    .floating-card {
+        position: absolute;
+        background: white;
+        color: var(--gray-900);
+        padding: 1.25rem 1.5rem;
+        border-radius: 1rem;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+        min-width: 140px;
+        white-space: nowrap;
+    }
+
+    .floating-card .oi {
+        font-size: 2rem;
+        color: var(--primary);
+    }
+
+    .card-1 {
+        top: 20px;
+        left: 20px;
+        animation: float 3s ease-in-out infinite;
+    }
+
+    .card-2 {
+        top: 180px;
+        right: 20px;
+        animation: float 3s ease-in-out infinite 1s;
+    }
+
+    .card-3 {
+        bottom: 60px;
+        left: 60px;
+        animation: float 3s ease-in-out infinite 2s;
+    }
+
+    @@keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-20px); }
+    }
+
+    /* Features Section */
+    .features-section {
+        padding: 4rem 0;
+    }
+
+    .section-header {
+        margin-bottom: 3rem;
+    }
+
+    .section-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+    }
+
+    .section-subtitle {
+        font-size: 1.125rem;
+        color: var(--gray-600);
+    }
+
+    .feature-card {
+        background: white;
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        transition: var(--transition);
+        height: 100%;
+        text-align: center;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-8px);
+        box-shadow: var(--shadow-xl);
+    }
+
+    .feature-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 2rem;
+        color: white;
+    }
+
+    .feature-icon.bg-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
+    .feature-icon.bg-success { background: linear-gradient(135deg, var(--success), var(--success-dark)); }
+    .feature-icon.bg-warning { background: linear-gradient(135deg, var(--warning), var(--warning-dark)); }
+    .feature-icon.bg-danger { background: linear-gradient(135deg, var(--danger), var(--danger-dark)); }
+
+    .feature-card h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--gray-900);
+    }
+
+    .feature-card p {
+        color: var(--gray-600);
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    /* Stats Section */
+    .stats-section {
+        background: var(--gray-50);
+        padding: 4rem 0;
+        margin: 3rem 0;
+        color: var(--gray-900);
+    }
+
+    .stat-box {
+        background: white;
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        transition: var(--transition);
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--gray-200);
+    }
+
+    .stat-box:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-4px);
+    }
+
+    .stat-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+        color: white;
+    }
+
+    .stat-icon.success { background: linear-gradient(135deg, var(--success), var(--success-dark)); }
+    .stat-icon.warning { background: linear-gradient(135deg, var(--warning), var(--warning-dark)); }
+    .stat-icon.danger { background: linear-gradient(135deg, var(--danger), var(--danger-dark)); }
+
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+        color: var(--gray-900);
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--gray-600);
+        font-weight: 500;
+    }
+
+    /* CTA Section */
+    .cta-section {
+        background: linear-gradient(135deg, #1e40af, #3b82f6);
+        padding: 5rem 2rem;
+        margin: 3rem -2rem -2rem -2rem;
+        text-align: center;
+        color: white;
+    }
+
+    .cta-content h2 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        color: white;
+    }
+
+    .cta-content p {
+        font-size: 1.25rem;
+        opacity: 0.95;
+        margin-bottom: 2rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .btn-light {
+        background: white;
+        color: var(--primary);
+        font-weight: 600;
+        border: 2px solid white;
+    }
+
+    .btn-light:hover {
+        background: transparent;
+        color: white;
+        border-color: white;
+        transform: translateY(-2px);
+    }
+
+    /* Responsive */
+    @@media (max-width: 991px) {
+        .hero-section {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .hero-illustration {
+            display: none;
+        }
+
+        .hero-title {
+            font-size: 2.5rem;
+        }
+
+        .hero-actions {
+            justify-content: center;
+        }
+    }
+
+    @@media (max-width: 767px) {
+        .hero-section {
+            padding: 3rem 1rem;
+            margin: -1rem -1rem 2rem -1rem;
+        }
+
+        .hero-title {
+            font-size: 2rem;
+        }
+
+        .stat-box {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .section-title {
+            font-size: 2rem;
+        }
+    }
+</style>

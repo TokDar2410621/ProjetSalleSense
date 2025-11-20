@@ -35,9 +35,27 @@ namespace SallseSense.Services
             {
                 await using var context = await _contextFactory.CreateDbContextAsync();
 
-                var photos = await context.Donnees
-                    .Where(d => d.PhotoBlob != null && d.PhotoBlob.Length > 0)
+                _logger.LogInformation("Début récupération des photos...");
+
+                // Compter d'abord le total de lignes
+                var totalDonnees = await context.Donnees.CountAsync();
+                _logger.LogInformation($"Total lignes dans Donnees: {totalDonnees}");
+
+                // Compter les photos avec BLOB non null
+                var totalPhotos = await context.Donnees
+                    .Where(d => d.PhotoBlob != null)
+                    .CountAsync();
+                _logger.LogInformation($"Photos avec photoBlob != null: {totalPhotos}");
+
+                // Récupérer les données avec photoBlob non null
+                var donnees = await context.Donnees
+                    .Where(d => d.PhotoBlob != null)
                     .OrderByDescending(d => d.DateHeure)
+                    .ToListAsync();
+
+                // Filtrer et projeter en mémoire (après récupération)
+                var photos = donnees
+                    .Where(d => d.PhotoBlob != null && d.PhotoBlob.Length > 0)
                     .Select(d => new PhotoInfo
                     {
                         IdDonnee = d.IdDonneePk,
@@ -46,14 +64,21 @@ namespace SallseSense.Services
                         NoSalle = d.NoSalle,
                         IdCapteur = d.IdCapteur
                     })
-                    .ToListAsync();
+                    .ToList();
 
-                _logger.LogInformation($"Récupération de {photos.Count} photos");
+                _logger.LogInformation($"✓ Récupération réussie de {photos.Count} photos");
+
+                // Logger les détails des premières photos
+                if (photos.Count > 0)
+                {
+                    _logger.LogInformation($"Première photo: ID={photos[0].IdDonnee}, Taille={photos[0].TailleBytes} bytes");
+                }
+
                 return photos;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erreur lors de la récupération des photos");
+                _logger.LogError(ex, "✗ Erreur lors de la récupération des photos");
                 return new List<PhotoInfo>();
             }
         }
@@ -101,9 +126,15 @@ namespace SallseSense.Services
             {
                 await using var context = await _contextFactory.CreateDbContextAsync();
 
-                var photos = await context.Donnees
-                    .Where(d => d.NoSalle == noSalle && d.PhotoBlob != null && d.PhotoBlob.Length > 0)
+                // Récupérer d'abord les données
+                var donnees = await context.Donnees
+                    .Where(d => d.NoSalle == noSalle && d.PhotoBlob != null)
                     .OrderByDescending(d => d.DateHeure)
+                    .ToListAsync();
+
+                // Filtrer et projeter en mémoire
+                var photos = donnees
+                    .Where(d => d.PhotoBlob != null && d.PhotoBlob.Length > 0)
                     .Select(d => new PhotoInfo
                     {
                         IdDonnee = d.IdDonneePk,
@@ -112,7 +143,7 @@ namespace SallseSense.Services
                         NoSalle = d.NoSalle,
                         IdCapteur = d.IdCapteur
                     })
-                    .ToListAsync();
+                    .ToList();
 
                 _logger.LogInformation($"Récupération de {photos.Count} photos pour la salle {noSalle}");
                 return photos;

@@ -152,10 +152,13 @@
                                 @foreach (var photo in photosArchive.Take(6))
                                 {
                                     <div class="col-6">
-                                        <div class="card">
-                                            <div class="card-body p-2 text-center bg-light">
-                                                <span class="oi oi-image" style="font-size: 2rem;"></span>
-                                                <p class="mb-0 small">@photo.DateHeure.ToString("dd/MM HH:mm")</p>
+                                        <div class="card shadow-sm">
+                                            <img src="/api/photo/@photo.IdDonnee"
+                                                 class="card-img-top"
+                                                 alt="Photo du @photo.DateHeure.ToString("dd/MM HH:mm")"
+                                                 style="height: 120px; object-fit: cover;">
+                                            <div class="card-body p-2 text-center">
+                                                <p class="mb-0 small">@photo.DateHeure.ToString("dd-MM HH:mm")</p>
                                             </div>
                                         </div>
                                     </div>
@@ -163,9 +166,9 @@
                             </div>
                             @if (photosArchive.Count > 6)
                             {
-                                <button class="btn btn-sm btn-outline-secondary w-100 mt-2">
+                                <a href="/photos" class="btn btn-sm btn-outline-secondary w-100 mt-2">
                                     Voir toutes (@photosArchive.Count)
-                                </button>
+                                </a>
                             }
                         }
                         else
