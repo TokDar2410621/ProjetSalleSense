@@ -2,61 +2,48 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
 using SallseSense.Data;
 
-namespace SallseSense.Pages
+namespace SallseSense.Services
 {
-    public partial class SalleDetails : ComponentBase
+    public class SalleDetailsService
     {
-        [Inject]
-        protected IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory { get; set; } = default!;
+        private readonly IDbContextFactory<Prog3A25BdSalleSenseContext> _dbFactory;
 
-        [Parameter]
-        public int Id { get; set; }
-
-        private SalleDetailViewModel? salle;
-        private List<ReservationViewModel> reservationsDuJour = new();
-        private List<ActiviteViewModel> activitesRecentes = new();
-        private List<PhotoViewModel> photosArchive = new();
-        private List<CapteurViewModel> capteurs = new();
-
-        protected override async Task OnInitializedAsync()
+        public SalleDetailsService(IDbContextFactory<Prog3A25BdSalleSenseContext> dbFactory)
         {
-            await LoadDataFromDatabase();
+            _dbFactory = dbFactory;
         }
 
-        private async Task LoadDataFromDatabase()
+        /// <summary>
+        /// Récupère toutes les données pour la page de détails d'une salle
+        /// </summary>
+        public async Task<SalleDetailsViewModel?> GetSalleDetailsAsync(int salleId)
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
 
             // Charger la salle depuis la BD
-            var salleBd = await db.Salles.FindAsync(Id);
-            if (salleBd == null) return;
+            var salleBd = await db.Salles.FindAsync(salleId);
+            if (salleBd == null) return null;
 
             var maintenant = DateTime.Now;
             var aujourdhui = DateTime.Today;
             var demain = aujourdhui.AddDays(1);
 
-            salle = new SalleDetailViewModel
-            {
-                IdSallePk = salleBd.IdSallePk,
-                Numero = salleBd.Numero,
-                CapaciteMaximale = salleBd.CapaciteMaximale,
-                EstDisponible = !await db.Reservations.AnyAsync(r =>
-                    r.NoSalle == Id &&
-                    r.HeureDebut <= maintenant &&
-                    r.HeureFin >= maintenant)
-            };
+            // Vérifier disponibilité
+            var estDisponible = !await db.Reservations.AnyAsync(r =>
+                r.NoSalle == salleId &&
+                r.HeureDebut <= maintenant &&
+                r.HeureFin >= maintenant);
 
             // Charger les réservations du jour
             var resDuJour = await db.Reservations
-                .Where(r => r.NoSalle == Id && r.HeureDebut >= aujourdhui && r.HeureDebut < demain)
+                .Where(r => r.NoSalle == salleId && r.HeureDebut >= aujourdhui && r.HeureDebut < demain)
                 .OrderBy(r => r.HeureDebut)
                 .ToListAsync();
 
-            reservationsDuJour = resDuJour.Select(r => new ReservationViewModel
+            var reservationsDuJour = resDuJour.Select(r => new ReservationViewModel
             {
                 HeureDebut = r.HeureDebut,
                 HeureFin = r.HeureFin,
@@ -66,12 +53,12 @@ namespace SallseSense.Pages
 
             // Charger les dernières réservations (activités récentes)
             var dernieresRes = await db.Reservations
-                .Where(r => r.NoSalle == Id)
+                .Where(r => r.NoSalle == salleId)
                 .OrderByDescending(r => r.HeureDebut)
                 .Take(5)
                 .ToListAsync();
 
-            activitesRecentes = dernieresRes.Select(r => new ActiviteViewModel
+            var activitesRecentes = dernieresRes.Select(r => new ActiviteViewModel
             {
                 Type = "Réservation",
                 Description = $"Réservation pour {r.NombrePersonne} personnes",
@@ -80,12 +67,12 @@ namespace SallseSense.Pages
 
             // Charger les photos depuis la table Donnees (photoBlob)
             var photos = await db.Donnees
-                .Where(d => d.NoSalle == Id && d.PhotoBlob != null)
+                .Where(d => d.NoSalle == salleId && d.PhotoBlob != null)
                 .OrderByDescending(d => d.DateHeure)
                 .Take(10)
                 .ToListAsync();
 
-            photosArchive = photos
+            var photosArchive = photos
                 .Where(p => p.PhotoBlob != null && p.PhotoBlob.Length > 0)
                 .Select(p => new PhotoViewModel
                 {
@@ -96,16 +83,43 @@ namespace SallseSense.Pages
             // Charger tous les capteurs
             var capteursBd = await db.Capteurs.ToListAsync();
 
-            capteurs = capteursBd.Select(c => new CapteurViewModel
+            var capteurs = capteursBd.Select(c => new CapteurViewModel
             {
                 Nom = c.Nom,
                 Type = c.Type,
                 EstActif = true,
                 DerniereMesure = null
             }).ToList();
+
+            return new SalleDetailsViewModel
+            {
+                Salle = new SalleInfoViewModel
+                {
+                    IdSallePk = salleBd.IdSallePk,
+                    Numero = salleBd.Numero,
+                    CapaciteMaximale = salleBd.CapaciteMaximale,
+                    EstDisponible = estDisponible
+                },
+                ReservationsDuJour = reservationsDuJour,
+                ActivitesRecentes = activitesRecentes,
+                PhotosArchive = photosArchive,
+                Capteurs = capteurs
+            };
         }
 
-        public class SalleDetailViewModel
+        /// <summary>
+        /// Conteneur principal pour toutes les données de la page
+        /// </summary>
+        public class SalleDetailsViewModel
+        {
+            public SalleInfoViewModel Salle { get; set; } = new();
+            public List<ReservationViewModel> ReservationsDuJour { get; set; } = new();
+            public List<ActiviteViewModel> ActivitesRecentes { get; set; } = new();
+            public List<PhotoViewModel> PhotosArchive { get; set; } = new();
+            public List<CapteurViewModel> Capteurs { get; set; } = new();
+        }
+
+        public class SalleInfoViewModel
         {
             public int IdSallePk { get; set; }
             public string Numero { get; set; } = string.Empty;

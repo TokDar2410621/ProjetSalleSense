@@ -1,5 +1,7 @@
 @page "/dashboard"
 @using Microsoft.AspNetCore.Authorization
+@using SallseSense.Services
+@inject DashboardService DashboardService
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
@@ -200,3 +202,46 @@
         </div>
     }
 </div>
+
+@code {
+    // Filtres (UI state)
+    private string filtreType = "all";
+    private string rechercheTexte = string.Empty;
+    private int? capaciteMin = null;
+    private DateTime? dateFiltre = null;
+    private bool vueGrille = true;
+
+    // Données du dashboard
+    private int nombreSallesActives = 0;
+    private int nombreReservations = 0;
+    private int nombreSallesDisponibles = 0;
+    private List<DashboardService.SalleViewModel> salles = new();
+    private List<DashboardService.ActiviteViewModel> dernieresActivites = new();
+
+    private DateTime derniereMiseAJour = DateTime.Now;
+    private bool isRefreshing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataFromDatabase();
+    }
+
+    private async Task RafraichirDonnees()
+    {
+        isRefreshing = true;
+        await LoadDataFromDatabase();
+        isRefreshing = false;
+    }
+
+    private async Task LoadDataFromDatabase()
+    {
+        var data = await DashboardService.GetDashboardDataAsync();
+
+        salles = data.Salles;
+        nombreSallesActives = data.NombreSallesActives;
+        nombreReservations = data.NombreReservations;
+        nombreSallesDisponibles = data.NombreSallesDisponibles;
+        dernieresActivites = data.DernieresActivites;
+        derniereMiseAJour = data.DerniereMiseAJour;
+    }
+}

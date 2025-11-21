@@ -1,5 +1,11 @@
 @page "/reservation/modifier/{Id:int}"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using SallseSense.Services
+@using SallseSense.Models
+@inject ModifierReservationService ModifierReservationService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
 @attribute [Authorize]
 
 <div class="container mt-4">
@@ -240,4 +246,212 @@
             </div>
         </div>
     </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private int currentUserId;
+    private bool isAdmin = false;
+    private Reservation? reservation;
+    private Reservation? reservationOriginale;
+    private ModifierReservationService.SalleInfoViewModel? salleInfo;
+    private List<ModifierReservationService.ReservationSimpleViewModel> toutesReservations = new();
+    private List<ModifierReservationService.ReservationSimpleViewModel> autresReservations = new();
+
+    private int reservationSelectionneeId;
+    private DateTime? dateReservation;
+    private TimeOnly? heureDebut;
+    private TimeOnly? heureFin;
+
+    private bool depassementCapacite = false;
+    private bool salleNonDisponible = false;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private bool afficherModalAnnulation = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Récupérer l'utilisateur connecté
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+            {
+                currentUserId = userId;
+                isAdmin = await ModifierReservationService.IsAdminAsync(userId);
+            }
+        }
+
+        await ChargerReservationsAsync();
+    }
+
+    private async Task ChargerReservationsAsync()
+    {
+        var viewModel = await ModifierReservationService.GetReservationDataAsync(Id, currentUserId, isAdmin);
+
+        if (viewModel != null)
+        {
+            reservation = viewModel.Reservation;
+            reservationOriginale = new Reservation
+            {
+                IdReservationPk = reservation.IdReservationPk,
+                HeureDebut = reservation.HeureDebut,
+                HeureFin = reservation.HeureFin,
+                NombrePersonne = reservation.NombrePersonne,
+                NoSalle = reservation.NoSalle,
+                NoPersonne = reservation.NoPersonne
+            };
+
+            salleInfo = viewModel.SalleInfo;
+            toutesReservations = viewModel.ToutesReservations;
+            autresReservations = viewModel.AutresReservations;
+
+            reservationSelectionneeId = reservation.IdReservationPk;
+            dateReservation = reservation.HeureDebut.Date;
+            heureDebut = TimeOnly.FromDateTime(reservation.HeureDebut);
+            heureFin = TimeOnly.FromDateTime(reservation.HeureFin);
+
+            VerifierCapacite();
+        }
+    }
+
+    private async Task OnReservationChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && int.TryParse(e.Value.ToString(), out int newId))
+        {
+            reservationSelectionneeId = newId;
+            Id = newId;
+            await ChargerReservationsAsync();
+        }
+    }
+
+    private void OnDateChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && DateTime.TryParse(e.Value.ToString(), out DateTime newDate))
+        {
+            dateReservation = newDate;
+            VerifierCapacite();
+        }
+    }
+
+    private void OnNombrePersonnesChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && int.TryParse(e.Value.ToString(), out int newNombre))
+        {
+            if (reservation != null)
+            {
+                reservation.NombrePersonne = newNombre;
+                VerifierCapacite();
+            }
+        }
+    }
+
+    private void OnHeureDebutChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && TimeOnly.TryParse(e.Value.ToString(), out TimeOnly newHeure))
+        {
+            heureDebut = newHeure;
+        }
+    }
+
+    private void OnHeureFinChanged(ChangeEventArgs e)
+    {
+        if (e.Value != null && TimeOnly.TryParse(e.Value.ToString(), out TimeOnly newHeure))
+        {
+            heureFin = newHeure;
+        }
+    }
+
+    private void VerifierCapacite()
+    {
+        if (reservation != null && salleInfo != null && reservation.NombrePersonne > 0)
+        {
+            depassementCapacite = reservation.NombrePersonne > salleInfo.CapaciteMaximale;
+        }
+    }
+
+    private bool PeutModifier()
+    {
+        return reservation != null &&
+               dateReservation.HasValue &&
+               heureDebut.HasValue &&
+               heureFin.HasValue &&
+               reservation.NombrePersonne > 0 &&
+               !salleNonDisponible;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        if (reservation == null || !dateReservation.HasValue || !heureDebut.HasValue || !heureFin.HasValue)
+        {
+            errorMessage = "Données de réservation invalides.";
+            return;
+        }
+
+        var nouvelleHeureDebut = dateReservation.Value.Add(heureDebut.Value.ToTimeSpan());
+        var nouvelleHeureFin = dateReservation.Value.Add(heureFin.Value.ToTimeSpan());
+
+        var result = await ModifierReservationService.ModifierReservationAsync(
+            reservation.IdReservationPk,
+            currentUserId,
+            nouvelleHeureDebut,
+            nouvelleHeureFin,
+            reservation.NombrePersonne,
+            isAdmin
+        );
+
+        if (result.Success)
+        {
+            successMessage = result.Message + " Redirection...";
+            await Task.Delay(2000);
+            NavigationManager.NavigateTo("/dashboard");
+        }
+        else
+        {
+            errorMessage = result.Message;
+        }
+    }
+
+    private void ConfirmerAnnulation()
+    {
+        afficherModalAnnulation = true;
+    }
+
+    private async Task AnnulerReservation()
+    {
+        afficherModalAnnulation = false;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        if (reservation == null)
+        {
+            errorMessage = "Réservation invalide.";
+            return;
+        }
+
+        var result = await ModifierReservationService.AnnulerReservationAsync(
+            reservation.IdReservationPk,
+            currentUserId,
+            isAdmin
+        );
+
+        if (result.Success)
+        {
+            successMessage = result.Message + " Redirection...";
+            await Task.Delay(2000);
+            NavigationManager.NavigateTo("/dashboard");
+        }
+        else
+        {
+            errorMessage = result.Message;
+        }
+    }
 }

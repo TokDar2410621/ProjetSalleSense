@@ -1,5 +1,11 @@
 @page "/reservation/creer"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using SallseSense.Services
+@using SallseSense.Models
+@inject ReservationFormService ReservationFormService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
 @attribute [Authorize]
 
 <div class="container mt-4">
@@ -172,3 +178,144 @@
         </div>
     </div>
 </div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "salleId")]
+    public int? SalleIdPreselectionne { get; set; }
+
+    private Reservation reservation = new Reservation { NombrePersonne = 1 };
+    private DateTime? dateReservation = DateTime.Today;
+    private TimeOnly? heureDebut = new TimeOnly(9, 0);
+    private TimeOnly? heureFin = new TimeOnly(10, 0);
+
+    private int currentUserId;
+    private List<ReservationFormService.SalleViewModel> sallesDisponibles = new();
+    private ReservationFormService.SalleViewModel? salleSelectionnee;
+    private List<Reservation> reservationsExistantes = new();
+
+    private bool depassementCapacite = false;
+    private bool salleNonDisponible = false;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Récupérer l'utilisateur connecté
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+            {
+                currentUserId = userId;
+            }
+        }
+
+        // Charger les salles disponibles pour aujourd'hui
+        await LoadSallesDisponiblesAsync();
+
+        if (SalleIdPreselectionne.HasValue)
+        {
+            reservation.NoSalle = SalleIdPreselectionne.Value;
+            await OnSalleChangedAsync();
+        }
+    }
+
+    private async Task LoadSallesDisponiblesAsync()
+    {
+        if (!dateReservation.HasValue || !heureDebut.HasValue || !heureFin.HasValue)
+        {
+            dateReservation = DateTime.Today;
+            heureDebut = new TimeOnly(9, 0);
+            heureFin = new TimeOnly(10, 0);
+        }
+
+        var debut = dateReservation.Value.Add(heureDebut.Value.ToTimeSpan());
+        var fin = dateReservation.Value.Add(heureFin.Value.ToTimeSpan());
+
+        // Utiliser le service pour charger les salles disponibles
+        sallesDisponibles = await ReservationFormService.GetSallesDisponiblesAsync(debut, fin);
+    }
+
+    private async Task OnSalleChangedAsync()
+    {
+        salleSelectionnee = sallesDisponibles.FirstOrDefault(s => s.IdSallePk == reservation.NoSalle);
+        VerifierCapacite();
+        await ChargerReservationsExistantesAsync();
+    }
+
+    private void VerifierCapacite()
+    {
+        if (salleSelectionnee != null && reservation.NombrePersonne > 0)
+        {
+            depassementCapacite = reservation.NombrePersonne > salleSelectionnee.CapaciteMaximale;
+        }
+    }
+
+    private async Task ChargerReservationsExistantesAsync()
+    {
+        if (reservation.NoSalle > 0 && dateReservation.HasValue)
+        {
+            var dateDebut = dateReservation.Value.Date;
+            var dateFin = dateReservation.Value.Date.AddDays(1);
+
+            reservationsExistantes = await ReservationFormService.GetReservationsBySalleAsync(
+                reservation.NoSalle,
+                dateDebut,
+                dateFin);
+        }
+    }
+
+    private bool PeutReserver()
+    {
+        return reservation.NoSalle > 0 &&
+               dateReservation.HasValue &&
+               heureDebut.HasValue &&
+               heureFin.HasValue &&
+               reservation.NombrePersonne > 0 &&
+               !salleNonDisponible;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+
+        // Validation de l'utilisateur
+        if (currentUserId <= 0)
+        {
+            errorMessage = "Vous devez être connecté pour réserver.";
+            return;
+        }
+
+        // Combiner date et heures
+        if (dateReservation.HasValue && heureDebut.HasValue && heureFin.HasValue)
+        {
+            reservation.HeureDebut = dateReservation.Value.Add(heureDebut.Value.ToTimeSpan());
+            reservation.HeureFin = dateReservation.Value.Add(heureFin.Value.ToTimeSpan());
+
+            // Créer la réservation via le service
+            var result = await ReservationFormService.CreerReservationAsync(
+                currentUserId,
+                reservation.NoSalle,
+                reservation.HeureDebut,
+                reservation.HeureFin,
+                reservation.NombrePersonne
+            );
+
+            if (result.Success)
+            {
+                successMessage = result.Message + " Redirection...";
+                await Task.Delay(2000);
+                NavigationManager.NavigateTo("/dashboard");
+            }
+            else
+            {
+                errorMessage = result.Message;
+            }
+        }
+    }
+}

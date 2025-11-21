@@ -2,52 +2,26 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
 using SallseSense.Data;
-using SallseSense.Models;
 
-namespace SallseSense.Pages
+namespace SallseSense.Services
 {
-    public partial class Dashboard : ComponentBase
+    public class DashboardService
     {
-        [Inject]
-        protected IDbContextFactory<Prog3A25BdSalleSenseContext> DbFactory { get; set; } = default!;
+        private readonly IDbContextFactory<Prog3A25BdSalleSenseContext> _dbFactory;
 
-        // Filtres
-        protected string filtreType = "all";
-        protected string rechercheTexte = string.Empty;
-        protected int? capaciteMin = null;
-        protected DateTime? dateFiltre = null;
-        protected bool vueGrille = true;
-
-        // Statistiques
-        protected int nombreSallesActives = 0;
-        protected int nombreReservations = 0;
-        protected int nombreSallesDisponibles = 0;
-
-        // Listes
-        protected List<SalleViewModel> salles = new();
-        protected List<ActiviteViewModel> dernieresActivites = new();
-
-        protected DateTime derniereMiseAJour = DateTime.Now;
-        protected bool isRefreshing = false;
-
-        protected override async Task OnInitializedAsync()
+        public DashboardService(IDbContextFactory<Prog3A25BdSalleSenseContext> dbFactory)
         {
-            await LoadDataFromDatabase();
+            _dbFactory = dbFactory;
         }
 
-        protected async Task RafraichirDonnees()
+        /// <summary>
+        /// Récupère toutes les données pour le dashboard
+        /// </summary>
+        public async Task<DashboardViewModel> GetDashboardDataAsync()
         {
-            isRefreshing = true;
-            await LoadDataFromDatabase();
-            isRefreshing = false;
-        }
-
-        protected async Task LoadDataFromDatabase()
-        {
-            await using var db = await DbFactory.CreateDbContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
 
             // Charger toutes les salles depuis la BD
             var sallesBd = await db.Salles.ToListAsync();
@@ -63,7 +37,7 @@ namespace SallseSense.Pages
             var aCapteurs = await db.Capteurs.AnyAsync();
 
             // Construire les ViewModels des salles
-            salles = sallesBd.Select(s => new SalleViewModel
+            var salles = sallesBd.Select(s => new SalleViewModel
             {
                 IdSallePk = s.IdSallePk,
                 Numero = s.Numero,
@@ -74,10 +48,9 @@ namespace SallseSense.Pages
             }).ToList();
 
             // Calculer les statistiques
-            nombreSallesActives = sallesBd.Count;
-            // Nombre de réservations EN COURS (pas futures)
-            nombreReservations = reservationsEnCours.Count;
-            nombreSallesDisponibles = salles.Count(s => s.EstDisponible);
+            var nombreSallesActives = sallesBd.Count;
+            var nombreReservations = reservationsEnCours.Count;
+            var nombreSallesDisponibles = salles.Count(s => s.EstDisponible);
 
             // Charger les dernières activités
             var dernieresRes = await db.Reservations
@@ -88,7 +61,7 @@ namespace SallseSense.Pages
             // Créer un dictionnaire des salles pour éviter les requêtes multiples
             var sallesDict = sallesBd.ToDictionary(s => s.IdSallePk, s => s.Numero);
 
-            dernieresActivites = dernieresRes.Select(r => new ActiviteViewModel
+            var dernieresActivites = dernieresRes.Select(r => new ActiviteViewModel
             {
                 Type = "Réservation",
                 NomSalle = sallesDict.ContainsKey(r.NoSalle) ? sallesDict[r.NoSalle] : "Inconnue",
@@ -96,11 +69,30 @@ namespace SallseSense.Pages
                 Status = r.HeureFin < maintenant ? "Terminée" : (r.HeureDebut <= maintenant ? "En cours" : "À venir")
             }).ToList();
 
-            // Mettre à jour l'heure de dernière mise à jour
-            derniereMiseAJour = DateTime.Now;
+            return new DashboardViewModel
+            {
+                Salles = salles,
+                NombreSallesActives = nombreSallesActives,
+                NombreReservations = nombreReservations,
+                NombreSallesDisponibles = nombreSallesDisponibles,
+                DernieresActivites = dernieresActivites,
+                DerniereMiseAJour = DateTime.Now
+            };
         }
 
-        // View Models
+        /// <summary>
+        /// ViewModel conteneur pour toutes les données du dashboard
+        /// </summary>
+        public class DashboardViewModel
+        {
+            public List<SalleViewModel> Salles { get; set; } = new();
+            public int NombreSallesActives { get; set; }
+            public int NombreReservations { get; set; }
+            public int NombreSallesDisponibles { get; set; }
+            public List<ActiviteViewModel> DernieresActivites { get; set; } = new();
+            public DateTime DerniereMiseAJour { get; set; }
+        }
+
         public class SalleViewModel
         {
             public int IdSallePk { get; set; }

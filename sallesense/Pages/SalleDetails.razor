@@ -1,9 +1,11 @@
 @page "/salle/{Id:int}"
 @using Microsoft.AspNetCore.Authorization
+@using SallseSense.Services
+@inject SalleDetailsService SalleDetailsService
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
-    @if (salle != null)
+    @if (viewModel?.Salle != null)
     {
         <!-- En-tête -->
         <div class="row mb-4">
@@ -12,17 +14,17 @@
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item"><a href="/dashboard">Accueil</a></li>
                         <li class="breadcrumb-item"><a href="/salles">Salles</a></li>
-                        <li class="breadcrumb-item active">Salle @salle.Numero</li>
+                        <li class="breadcrumb-item active">Salle @viewModel.Salle.Numero</li>
                     </ol>
                 </nav>
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h2>Salle @salle.Numero</h2>
+                        <h2>Salle @viewModel.Salle.Numero</h2>
                         <p class="text-muted">Détails et informations de la salle</p>
                     </div>
                     <div>
-                        <span class="badge @(salle.EstDisponible ? "bg-success" : "bg-danger") fs-5">
-                            @(salle.EstDisponible ? "Disponible" : "Occupée")
+                        <span class="badge @(viewModel.Salle.EstDisponible ? "bg-success" : "bg-danger") fs-5">
+                            @(viewModel.Salle.EstDisponible ? "Disponible" : "Occupée")
                         </span>
                     </div>
                 </div>
@@ -40,21 +42,21 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <strong>Numéro:</strong>
-                                <p>@salle.Numero</p>
+                                <p>@viewModel.Salle.Numero</p>
                             </div>
                             <div class="col-md-6">
                                 <strong>Capacité maximale:</strong>
-                                <p>@salle.CapaciteMaximale personnes</p>
+                                <p>@viewModel.Salle.CapaciteMaximale personnes</p>
                             </div>
                         </div>
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <strong>Bâtiment:</strong>
-                                <p>@salle.Numero.Split('-')[0]</p>
+                                <p>@viewModel.Salle.Numero.Split('-')[0]</p>
                             </div>
                             <div class="col-md-6">
                                 <strong>Étage:</strong>
-                                <p>@salle.Numero</p>
+                                <p>@viewModel.Salle.Numero</p>
                             </div>
                         </div>
                     </div>
@@ -66,7 +68,7 @@
                         <h5 class="mb-0">Réservations du jour</h5>
                     </div>
                     <div class="card-body">
-                        @if (reservationsDuJour.Any())
+                        @if (viewModel.ReservationsDuJour.Any())
                         {
                             <div class="table-responsive">
                                 <table class="table table-sm">
@@ -79,7 +81,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var reservation in reservationsDuJour)
+                                        @foreach (var reservation in viewModel.ReservationsDuJour)
                                         {
                                             <tr>
                                                 <td>@reservation.HeureDebut.ToString("HH:mm")</td>
@@ -115,10 +117,10 @@
                         <h5 class="mb-0">Résumé des activités récentes</h5>
                     </div>
                     <div class="card-body">
-                        @if (activitesRecentes.Any())
+                        @if (viewModel.ActivitesRecentes.Any())
                         {
                             <div class="list-group list-group-flush">
-                                @foreach (var activite in activitesRecentes)
+                                @foreach (var activite in viewModel.ActivitesRecentes)
                                 {
                                     <div class="list-group-item">
                                         <div class="d-flex w-100 justify-content-between">
@@ -146,10 +148,10 @@
                         <h5 class="mb-0">Photo archive</h5>
                     </div>
                     <div class="card-body">
-                        @if (photosArchive.Any())
+                        @if (viewModel.PhotosArchive.Any())
                         {
                             <div class="row g-2">
-                                @foreach (var photo in photosArchive.Take(6))
+                                @foreach (var photo in viewModel.PhotosArchive.Take(6))
                                 {
                                     <div class="col-6">
                                         <div class="card shadow-sm">
@@ -164,10 +166,10 @@
                                     </div>
                                 }
                             </div>
-                            @if (photosArchive.Count > 6)
+                            @if (viewModel.PhotosArchive.Count > 6)
                             {
                                 <a href="/photos" class="btn btn-sm btn-outline-secondary w-100 mt-2">
-                                    Voir toutes (@photosArchive.Count)
+                                    Voir toutes (@viewModel.PhotosArchive.Count)
                                 </a>
                             }
                         }
@@ -184,10 +186,10 @@
                         <h5 class="mb-0">Capteurs actifs</h5>
                     </div>
                     <div class="card-body">
-                        @if (capteurs.Any())
+                        @if (viewModel.Capteurs.Any())
                         {
                             <ul class="list-group list-group-flush">
-                                @foreach (var capteur in capteurs)
+                                @foreach (var capteur in viewModel.Capteurs)
                                 {
                                     <li class="list-group-item px-0">
                                         <div class="d-flex justify-content-between align-items-center">
@@ -248,3 +250,20 @@
         </div>
     }
 </div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private SalleDetailsService.SalleDetailsViewModel? viewModel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        viewModel = await SalleDetailsService.GetSalleDetailsAsync(Id);
+    }
+}

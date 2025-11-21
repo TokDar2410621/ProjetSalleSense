@@ -1,5 +1,11 @@
 @page "/profil"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using SallseSense.Services
+@using SallseSense.Models
+@inject ProfilService ProfilService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
 @attribute [Authorize]
 
 <h3>Mon Profil</h3>
@@ -160,4 +166,159 @@ else
             </div>
         </div>
     </div>
+}
+
+@code {
+    private Utilisateur? utilisateur;
+    private UtilisateurEditModel utilisateurEdit = new();
+    private MotDePasseModel motDePasseModel = new();
+
+    private bool isLoading = true;
+    private bool modeEdition = false;
+    private bool modeChangementMotDePasse = false;
+    private bool isSubmitting = false;
+    private bool isSubmittingPassword = false;
+
+    private string messageSucces = string.Empty;
+    private string messageErreur = string.Empty;
+
+    private int userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChargerUtilisateur();
+    }
+
+    private async Task ChargerUtilisateur()
+    {
+        isLoading = true;
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out userId))
+                {
+                    utilisateur = await ProfilService.GetUtilisateurAsync(userId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            messageErreur = $"Erreur lors du chargement: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ActiverModeEdition()
+    {
+        if (utilisateur != null)
+        {
+            utilisateurEdit = new UtilisateurEditModel
+            {
+                Pseudo = utilisateur.Pseudo,
+                Courriel = utilisateur.Courriel
+            };
+            modeEdition = true;
+            messageSucces = string.Empty;
+            messageErreur = string.Empty;
+        }
+    }
+
+    private void AnnulerEdition()
+    {
+        modeEdition = false;
+        utilisateurEdit = new();
+    }
+
+    private async Task SauvegarderModifications()
+    {
+        isSubmitting = true;
+        messageSucces = string.Empty;
+        messageErreur = string.Empty;
+
+        try
+        {
+            var result = await ProfilService.ModifierProfilAsync(userId, utilisateurEdit.Pseudo, utilisateurEdit.Courriel);
+
+            if (result.Success)
+            {
+                await ChargerUtilisateur();
+                modeEdition = false;
+                messageSucces = result.Message;
+            }
+            else
+            {
+                messageErreur = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            messageErreur = $"Erreur: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void AnnulerChangementMotDePasse()
+    {
+        modeChangementMotDePasse = false;
+        motDePasseModel = new();
+    }
+
+    private async Task ChangerMotDePasse()
+    {
+        isSubmittingPassword = true;
+        messageSucces = string.Empty;
+        messageErreur = string.Empty;
+
+        try
+        {
+            var result = await ProfilService.ChangerMotDePasseAsync(
+                userId,
+                motDePasseModel.AncienMotDePasse,
+                motDePasseModel.NouveauMotDePasse,
+                motDePasseModel.ConfirmationMotDePasse);
+
+            if (result.Success)
+            {
+                modeChangementMotDePasse = false;
+                motDePasseModel = new();
+                messageSucces = result.Message;
+            }
+            else
+            {
+                messageErreur = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            messageErreur = $"Erreur: {ex.Message}";
+        }
+        finally
+        {
+            isSubmittingPassword = false;
+        }
+    }
+
+    public class UtilisateurEditModel
+    {
+        public string Pseudo { get; set; } = string.Empty;
+        public string Courriel { get; set; } = string.Empty;
+    }
+
+    public class MotDePasseModel
+    {
+        public string AncienMotDePasse { get; set; } = string.Empty;
+        public string NouveauMotDePasse { get; set; } = string.Empty;
+        public string ConfirmationMotDePasse { get; set; } = string.Empty;
+    }
 }

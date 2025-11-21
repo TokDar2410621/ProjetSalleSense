@@ -1,5 +1,7 @@
 @page "/"
 @using Microsoft.AspNetCore.Components.Authorization
+@using SallseSense.Services
+@inject HomeService HomeService
 
 <PageTitle>Accueil - SalleSense</PageTitle>
 
@@ -513,3 +515,25 @@
         }
     }
 </style>
+
+@code {
+    private int nombreSalles = 0;
+    private int nombreReservations = 0;
+    private int nombreUtilisateurs = 0;
+    private int nombrePhotos = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatistics();
+    }
+
+    private async Task LoadStatistics()
+    {
+        var stats = await HomeService.GetStatisticsAsync();
+
+        nombreSalles = stats.NombreSalles;
+        nombreReservations = stats.NombreReservations;
+        nombreUtilisateurs = stats.NombreUtilisateurs;
+        nombrePhotos = stats.NombrePhotos;
+    }
+}

@@ -31,6 +31,13 @@ public class Startup
         services.AddScoped<AuthService>();
         services.AddScoped<PhotoService>();
         services.AddScoped<ReservationService>();
+        services.AddScoped<HomeService>();
+        services.AddScoped<SalleDetailsService>();
+        services.AddScoped<ReservationFormService>();
+        services.AddScoped<DashboardService>();
+        services.AddScoped<ProfilService>();
+        services.AddScoped<AdminService>();
+        services.AddScoped<ModifierReservationService>();
 
         // Services d'authentification
         services.AddScoped<ProtectedSessionStorage>();

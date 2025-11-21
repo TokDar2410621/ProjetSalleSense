@@ -15,7 +15,4 @@ public partial class Blacklist
 
     [Column("idUtilisateur")]
     public int IdUtilisateur { get; set; }
-
-    [Column("duree")]
-    public TimeOnly? Duree { get; set; }
 }

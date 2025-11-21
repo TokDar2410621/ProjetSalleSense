@@ -1,9 +1,11 @@
 @page "/photos"
 @using SallseSense.Services
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Logging
 @attribute [Authorize]
 @inject PhotoService PhotoService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject ILogger<Photos> Logger
 
 <PageTitle>Photos - SalleSense</PageTitle>
@@ -94,13 +96,16 @@
                             </p>
                         </div>
 
-                        <div class="card-footer bg-transparent">
-                            <a href="/api/photo/@photo.IdDonnee"
-                               download="photo_@(photo.IdDonnee)_@(photo.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
-                               class="btn btn-sm btn-outline-primary w-100">
-                                <span class="oi oi-data-transfer-download" aria-hidden="true"></span> Télécharger
-                            </a>
-                        </div>
+                        @if (isAdmin)
+                        {
+                            <div class="card-footer bg-transparent">
+                                <a href="/api/photo/@photo.IdDonnee"
+                                   download="photo_@(photo.IdDonnee)_@(photo.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
+                                   class="btn btn-sm btn-outline-primary w-100">
+                                    <span class="oi oi-data-transfer-download" aria-hidden="true"></span> Télécharger
+                                </a>
+                            </div>
+                        }
                     </div>
                 </div>
             }
@@ -129,11 +134,14 @@
                         <strong>Salle:</strong> @selectedPhoto.NoSalle |
                         <strong>Taille:</strong> @selectedPhoto.TailleFormatee
                     </div>
-                    <a href="/api/photo/@selectedPhoto.IdDonnee"
-                       download="photo_@(selectedPhoto.IdDonnee)_@(selectedPhoto.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
-                       class="btn btn-primary">
-                        <span class="oi oi-data-transfer-download" aria-hidden="true"></span> Télécharger
-                    </a>
+                    @if (isAdmin)
+                    {
+                        <a href="/api/photo/@selectedPhoto.IdDonnee"
+                           download="photo_@(selectedPhoto.IdDonnee)_@(selectedPhoto.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
+                           class="btn btn-primary">
+                            <span class="oi oi-data-transfer-download" aria-hidden="true"></span> Télécharger
+                        </a>
+                    }
                     <button type="button" class="btn btn-secondary" @onclick="CloseModal">Fermer</button>
                 </div>
             </div>
@@ -147,12 +155,26 @@
     private List<int> salles = new();
     private PhotoInfo selectedPhoto = null;
     private bool isLoading = true;
+    private bool isAdmin = false;
     private string errorMessage = null;
     private int selectedSalleFilter = 0;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadUserRole();
         await LoadPhotos();
+    }
+
+    private async Task LoadUserRole()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var roleClaim = user.FindFirst(System.Security.Claims.ClaimTypes.Role);
+            isAdmin = roleClaim?.Value == "Admin";
+        }
     }
 
     private async Task LoadPhotos()

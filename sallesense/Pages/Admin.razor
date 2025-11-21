@@ -1,5 +1,10 @@
 @page "/admin"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using SallseSense.Services
+@inject AdminService AdminService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
 @attribute [Authorize]
 
 <h3>🔐 Administration - Gestion des utilisateurs</h3>
@@ -169,4 +174,98 @@ else
             </div>
         </div>
     </div>
+}
+
+@code {
+    private List<AdminService.UtilisateurViewModel> utilisateurs = new();
+    private List<int> blacklistedUserIds = new();
+    private int currentUserId;
+
+    private bool isLoading = true;
+    private bool isAdmin = false;
+    private string? errorMessage = null;
+    private string? successMessage = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentUser();
+
+        if (isAdmin)
+        {
+            await LoadDataAsync();
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadCurrentUser()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+            {
+                currentUserId = userId;
+                isAdmin = await AdminService.IsAdminAsync(userId);
+            }
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            var data = await AdminService.GetAdminDataAsync();
+            utilisateurs = data.Utilisateurs;
+            blacklistedUserIds = data.BlacklistedUserIds;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erreur lors du chargement: {ex.Message}";
+        }
+    }
+
+    private async Task AddToBlacklist(int userId)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        var result = await AdminService.AddToBlacklistAsync(userId, currentUserId);
+
+        if (result.Success)
+        {
+            successMessage = result.Message;
+            await LoadDataAsync();
+        }
+        else
+        {
+            errorMessage = result.Message;
+        }
+    }
+
+    private async Task RemoveFromBlacklist(int userId)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        var result = await AdminService.RemoveFromBlacklistAsync(userId);
+
+        if (result.Success)
+        {
+            successMessage = result.Message;
+            await LoadDataAsync();
+        }
+        else
+        {
+            errorMessage = result.Message;
+        }
+    }
+
+    private void RetourDashboard()
+    {
+        NavigationManager.NavigateTo("/dashboard");
+    }
 }
