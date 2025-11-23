@@ -37,14 +37,15 @@ namespace SallseSense.Services
                 r.HeureDebut <= maintenant &&
                 r.HeureFin >= maintenant);
 
-            // Charger les réservations du jour
+            // Charger toutes les réservations futures (à partir d'aujourd'hui)
             var resDuJour = await db.Reservations
-                .Where(r => r.NoSalle == salleId && r.HeureDebut >= aujourdhui && r.HeureDebut < demain)
+                .Where(r => r.NoSalle == salleId && r.HeureDebut >= aujourdhui)
                 .OrderBy(r => r.HeureDebut)
                 .ToListAsync();
 
             var reservationsDuJour = resDuJour.Select(r => new ReservationViewModel
             {
+                IdReservationPk = r.IdReservationPk,
                 HeureDebut = r.HeureDebut,
                 HeureFin = r.HeureFin,
                 NombrePersonne = r.NombrePersonne,
@@ -129,6 +130,7 @@ namespace SallseSense.Services
 
         public class ReservationViewModel
         {
+            public int IdReservationPk { get; set; }
             public DateTime HeureDebut { get; set; }
             public DateTime HeureFin { get; set; }
             public int NombrePersonne { get; set; }

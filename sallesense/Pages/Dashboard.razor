@@ -1,7 +1,9 @@
 @page "/dashboard"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using SallseSense.Services
 @inject DashboardService DashboardService
+@inject AuthenticationStateProvider AuthStateProvider
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
@@ -101,7 +103,15 @@
                                             <br />
                                             <small class="text-muted">@activite.DateHeure.ToString("dd/MM/yyyy HH:mm")</small>
                                         </div>
-                                        <span class="badge bg-secondary">@activite.Status</span>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge bg-secondary">@activite.Status</span>
+                                            @if (activite.Status != "Terminée")
+                                            {
+                                                <a href="/reservation/modifier/@activite.IdReservation" class="btn btn-sm btn-outline-primary">
+                                                    <span class="oi oi-pencil"></span> Modifier
+                                                </a>
+                                            }
+                                        </div>
                                     </div>
                                 </li>
                             }

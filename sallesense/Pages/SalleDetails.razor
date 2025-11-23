@@ -1,7 +1,9 @@
 @page "/salle/{Id:int}"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using SallseSense.Services
 @inject SalleDetailsService SalleDetailsService
+@inject AuthenticationStateProvider AuthStateProvider
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
@@ -65,7 +67,7 @@
                 <!-- Disponibilité et réservations -->
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h5 class="mb-0">Réservations du jour</h5>
+                        <h5 class="mb-0">Réservations à venir</h5>
                     </div>
                     <div class="card-body">
                         @if (viewModel.ReservationsDuJour.Any())
@@ -74,24 +76,38 @@
                                 <table class="table table-sm">
                                     <thead>
                                         <tr>
+                                            <th>Date</th>
                                             <th>Heure début</th>
                                             <th>Heure fin</th>
                                             <th>Personnes</th>
                                             <th>Status</th>
+                                            @if (isAdmin)
+                                            {
+                                                <th>Actions</th>
+                                            }
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @foreach (var reservation in viewModel.ReservationsDuJour)
                                         {
                                             <tr>
+                                                <td>@reservation.HeureDebut.ToString("dd/MM/yyyy")</td>
                                                 <td>@reservation.HeureDebut.ToString("HH:mm")</td>
                                                 <td>@reservation.HeureFin.ToString("HH:mm")</td>
                                                 <td>@reservation.NombrePersonne</td>
                                                 <td>
                                                     <span class="badge @(reservation.EstEnCours ? "bg-warning text-dark" : "bg-secondary")">
-                                                        @(reservation.EstEnCours ? "En cours" : "Terminée")
+                                                        @(reservation.EstEnCours ? "En cours" : "À venir")
                                                     </span>
                                                 </td>
+                                                @if (isAdmin)
+                                                {
+                                                    <td>
+                                                        <a href="/reservation/modifier/@reservation.IdReservationPk" class="btn btn-sm btn-outline-primary">
+                                                            <span class="oi oi-pencil"></span> Modifier
+                                                        </a>
+                                                    </td>
+                                                }
                                             </tr>
                                         }
                                     </tbody>
@@ -100,7 +116,7 @@
                         }
                         else
                         {
-                            <p class="text-muted">Aucune réservation aujourd'hui</p>
+                            <p class="text-muted">Aucune réservation à venir</p>
                         }
 
                         <div class="d-grid gap-2 mt-3">
@@ -256,10 +272,24 @@
     public int Id { get; set; }
 
     private SalleDetailsService.SalleDetailsViewModel? viewModel;
+    private bool isAdmin = false;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadUserRole();
         await LoadDataAsync();
+    }
+
+    private async Task LoadUserRole()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var roleClaim = user.FindFirst(System.Security.Claims.ClaimTypes.Role);
+            isAdmin = roleClaim?.Value == "Admin";
+        }
     }
 
     private async Task LoadDataAsync()

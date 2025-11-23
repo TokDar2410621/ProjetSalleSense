@@ -63,6 +63,7 @@ namespace SallseSense.Services
 
             var dernieresActivites = dernieresRes.Select(r => new ActiviteViewModel
             {
+                IdReservation = r.IdReservationPk,
                 Type = "Réservation",
                 NomSalle = sallesDict.ContainsKey(r.NoSalle) ? sallesDict[r.NoSalle] : "Inconnue",
                 DateHeure = r.HeureDebut,
@@ -104,6 +105,7 @@ namespace SallseSense.Services
 
         public class ActiviteViewModel
         {
+            public int IdReservation { get; set; }
             public string Type { get; set; } = string.Empty;
             public string NomSalle { get; set; } = string.Empty;
             public DateTime DateHeure { get; set; }
