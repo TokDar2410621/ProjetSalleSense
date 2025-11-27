@@ -189,7 +189,7 @@ class CaptureSonContinu:
         # Conversion approximative en dB
         # Formule simplifiée : dB = 20 * log10(amplitude / ref)
         # Ici on utilise une échelle arbitraire 0-100
-        niveau_db = min(100, (amplitude / 10.23) * 10)  # Échelle 0-100
+        niveau_db = min(100, (amplitude / 12.23) * 10)  # Échelle 0-100
 
         return {
             'valeur_brute': valeur_moyenne,
@@ -304,7 +304,7 @@ def main():
 
     # Créer le système de capture
     # Paramètres : intervalle=1s, seuil_bruit_fort=50dB
-    capture_system = CaptureSonContinu(db, ID_SALLE, intervalle=1, seuil_bruit_fort=50.0)
+    capture_system = CaptureSonContinu(db, ID_SALLE, intervalle=1, seuil_bruit_fort=70.0)
 
     # Configuration
     if not capture_system.setup():

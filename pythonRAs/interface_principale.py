@@ -1,6 +1,8 @@
 """
 Interface principale moderne avec visualisation des données en temps réel
 Design amélioré avec couleurs, cartes, et animations
++ Affichage photo en temps réel
++ Boutons de contrôle capture son/image
 """
 
 import tkinter as tk
@@ -8,6 +10,9 @@ from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
 import threading
 import time
+import subprocess
+import signal
+import os
 from io import BytesIO
 from PIL import Image, ImageTk
 import matplotlib
@@ -23,7 +28,7 @@ class InterfacePrincipaleModerne:
     def __init__(self, db_connection, user_info=None):
         self.root = tk.Tk()
         self.root.title("SalleSense")
-        self.root.geometry("1400x800")
+        self.root.geometry("1400x900")
 
         # Couleurs modernes (même palette que l'interface de connexion)
         self.colors = {
@@ -48,16 +53,31 @@ class InterfacePrincipaleModerne:
         # Variables de contrôle
         self.en_cours = True
         self.auto_refresh = tk.BooleanVar(value=True)
-        self.refresh_interval = 500  # ms - Rafraîchissement plus rapide pour animation fluide
+        self.refresh_interval = 500  # ms
+
+        # Processus de capture
+        self.capture_photo_process = None
+        self.capture_son_process = None
+        self.capture_photo_running = False
+        self.capture_son_running = False
+
+        # Enregistrement vidéo local
+        self.video_process = None
+        self.video_running = False
+        self.video_output_dir = os.path.join(os.path.dirname(__file__), 'videos_locales')
 
         # Données
         self.derniere_mesure_son = None
         self.derniere_photo = None
+        self.derniere_photo_id = None  # Pour détecter les nouvelles photos
 
         # Animation de la barre de son
         self.niveau_son_actuel = 0
         self.niveau_son_cible = 0
-        self.historique_son = []  # Historique des 50 dernières valeurs pour forme d'onde
+        self.historique_son = []
+
+        # Image temps réel
+        self.photo_temps_reel = None
 
         # Créer l'interface
         self.creer_interface()
@@ -73,11 +93,9 @@ class InterfacePrincipaleModerne:
 
     def creer_carte(self, parent, title=None):
         """Crée un widget carte avec ombre"""
-        # Container principal (ombre simulée par la bordure)
         shadow = tk.Frame(parent, bg='#cbd5e1', relief=tk.RAISED, borderwidth=1)
         shadow.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Carte principale
         card = tk.Frame(shadow, bg=self.colors['card'], relief=tk.FLAT)
         card.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
@@ -132,7 +150,6 @@ class InterfacePrincipaleModerne:
                                      padx=20, pady=8)
         self.btn_refresh.pack(side=tk.LEFT, padx=5)
 
-        # Effet hover
         self.btn_refresh.bind('<Enter>', lambda e: self.btn_refresh.config(bg=self.colors['warning']))
         self.btn_refresh.bind('<Leave>', lambda e: self.btn_refresh.config(bg=self.colors['secondary']))
 
@@ -200,18 +217,128 @@ class InterfacePrincipaleModerne:
         frame = tk.Frame(self.notebook, bg=self.colors['bg'])
         self.notebook.add(frame, text="📊 Temps Réel")
 
-        # Top frame - Indicateurs en cartes
-        top_frame = tk.Frame(frame, bg=self.colors['bg'])
-        top_frame.pack(fill=tk.X, padx=10, pady=10)
+        # === BOUTONS DE CONTRÔLE CAPTURE ===
+        control_frame = tk.Frame(frame, bg=self.colors['bg'])
+        control_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        # Carte 1: Niveau Sonore
-        son_card_container = tk.Frame(top_frame, bg=self.colors['bg'])
-        son_card_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+        control_card_container = tk.Frame(control_frame, bg=self.colors['bg'])
+        control_card_container.pack(fill=tk.X)
+
+        control_shadow = tk.Frame(control_card_container, bg='#cbd5e1', relief=tk.RAISED, borderwidth=1)
+        control_shadow.pack(fill=tk.X, padx=5, pady=5)
+
+        control_card = tk.Frame(control_shadow, bg=self.colors['card'], relief=tk.FLAT)
+        control_card.pack(fill=tk.X, padx=2, pady=2)
+
+        control_content = tk.Frame(control_card, bg=self.colors['card'], padx=20, pady=15)
+        control_content.pack(fill=tk.X)
+
+        tk.Label(control_content, text="🎛️ Contrôle des Captures",
+                font=('Arial', 12, 'bold'),
+                fg=self.colors['dark'], bg=self.colors['card']).pack(side=tk.LEFT, padx=10)
+
+        # Bouton capture photos
+        self.btn_capture_photo = tk.Button(control_content, text='📷 Démarrer Capture Photos',
+                                           font=('Arial', 10, 'bold'),
+                                           fg='white',
+                                           bg=self.colors['success'],
+                                           activebackground='#059669',
+                                           activeforeground='white',
+                                           relief=tk.FLAT,
+                                           cursor='hand2',
+                                           command=self.toggle_capture_photos,
+                                           padx=15, pady=8)
+        self.btn_capture_photo.pack(side=tk.LEFT, padx=10)
+
+        # Bouton capture son
+        self.btn_capture_son = tk.Button(control_content, text='🎤 Démarrer Capture Son',
+                                         font=('Arial', 10, 'bold'),
+                                         fg='white',
+                                         bg=self.colors['success'],
+                                         activebackground='#059669',
+                                         activeforeground='white',
+                                         relief=tk.FLAT,
+                                         cursor='hand2',
+                                         command=self.toggle_capture_son,
+                                         padx=15, pady=8)
+        self.btn_capture_son.pack(side=tk.LEFT, padx=10)
+
+        # Bouton enregistrement vidéo local
+        self.btn_video = tk.Button(control_content, text='�� Démarrer Vidéo',
+                                   font=('Arial', 10, 'bold'),
+                                   fg='white',
+                                   bg=self.colors['secondary'],
+                                   activebackground='#7c3aed',
+                                   activeforeground='white',
+                                   relief=tk.FLAT,
+                                   cursor='hand2',
+                                   command=self.toggle_video,
+                                   padx=15, pady=8)
+        self.btn_video.pack(side=tk.LEFT, padx=10)
+
+        # Status des captures
+        self.capture_status_label = tk.Label(control_content, text="⏹️ Captures arrêtées",
+                                             font=('Arial', 10),
+                                             fg=self.colors['gray'],
+                                             bg=self.colors['card'])
+        self.capture_status_label.pack(side=tk.RIGHT, padx=20)
+
+        # === MAIN CONTENT ===
+        main_frame = tk.Frame(frame, bg=self.colors['bg'])
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        # Left side - Photo temps réel + Son
+        left_frame = tk.Frame(main_frame, bg=self.colors['bg'])
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Carte Photo Temps Réel
+        photo_card_container = tk.Frame(left_frame, bg=self.colors['bg'])
+        photo_card_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        photo_shadow = tk.Frame(photo_card_container, bg='#cbd5e1', relief=tk.RAISED, borderwidth=1)
+        photo_shadow.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        photo_card = tk.Frame(photo_shadow, bg=self.colors['card'], relief=tk.FLAT)
+        photo_card.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        photo_header = tk.Frame(photo_card, bg=self.colors['secondary'], height=40)
+        photo_header.pack(fill=tk.X)
+        photo_header.pack_propagate(False)
+
+        tk.Label(photo_header, text="📹 Dernière Photo (Temps Réel)", font=('Arial', 12, 'bold'),
+                fg='white', bg=self.colors['secondary']).pack(pady=8)
+
+        photo_content = tk.Frame(photo_card, bg=self.colors['card'], padx=10, pady=10)
+        photo_content.pack(fill=tk.BOTH, expand=True)
+
+        # Canvas pour l'image temps réel
+        self.photo_canvas = tk.Canvas(photo_content, bg=self.colors['border'],
+                                      width=640, height=400, highlightthickness=0)
+        self.photo_canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Placeholder texte
+        self.photo_canvas.create_text(320, 200, text="Aucune photo",
+                                     font=('Arial', 14), fill=self.colors['gray'],
+                                     tags="placeholder")
+
+        self.photo_info_label = tk.Label(photo_content, text="En attente de capture...",
+                                         font=('Arial', 10),
+                                         fg=self.colors['gray'],
+                                         bg=self.colors['card'])
+        self.photo_info_label.pack(pady=5)
+
+        # Right side - Son + Stats
+        right_frame = tk.Frame(main_frame, bg=self.colors['bg'], width=400)
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, padx=5)
+        right_frame.pack_propagate(False)
+
+        # Carte Niveau Sonore
+        son_card_container = tk.Frame(right_frame, bg=self.colors['bg'])
+        son_card_container.pack(fill=tk.X, pady=5)
 
         son_card = self.creer_carte(son_card_container)
 
-        # Contenu carte son
-        son_content = tk.Frame(son_card, bg=self.colors['card'], padx=30, pady=20)
+        son_content = tk.Frame(son_card, bg=self.colors['card'], padx=20, pady=15)
         son_content.pack(fill=tk.BOTH, expand=True)
 
         tk.Label(son_content, text="🎤 Niveau Sonore",
@@ -219,76 +346,72 @@ class InterfacePrincipaleModerne:
                 fg=self.colors['dark'], bg=self.colors['card']).pack(pady=(0, 10))
 
         self.son_value_label = tk.Label(son_content, text="-- dB",
-                                        font=('Arial', 40, 'bold'),
+                                        font=('Arial', 36, 'bold'),
                                         fg=self.colors['primary'],
                                         bg=self.colors['card'])
-        self.son_value_label.pack(pady=10)
+        self.son_value_label.pack(pady=5)
 
         # Canvas pour barre de son animée
         self.son_canvas = tk.Canvas(son_content, bg=self.colors['border'],
-                                   height=40, highlightthickness=0)
+                                   height=35, highlightthickness=0)
         self.son_canvas.pack(fill=tk.X, pady=10)
-
-        # Créer les éléments de la barre
-        self.son_barre_id = None
-        self.son_pics_ids = []  # IDs des pics d'amplitude
 
         # Label de seuils
         seuils_frame = tk.Frame(son_content, bg=self.colors['card'])
         seuils_frame.pack(fill=tk.X, pady=5)
 
-        tk.Label(seuils_frame, text="0 dB", font=('Arial', 8),
+        tk.Label(seuils_frame, text="0", font=('Arial', 8),
                 fg=self.colors['gray'], bg=self.colors['card']).pack(side=tk.LEFT)
-        tk.Label(seuils_frame, text="50 dB", font=('Arial', 8),
-                fg=self.colors['success'], bg=self.colors['card']).pack(side=tk.LEFT, padx=50)
-        tk.Label(seuils_frame, text="70 dB", font=('Arial', 8),
-                fg=self.colors['warning'], bg=self.colors['card']).pack(side=tk.LEFT, padx=50)
+        tk.Label(seuils_frame, text="50", font=('Arial', 8),
+                fg=self.colors['success'], bg=self.colors['card']).pack(side=tk.LEFT, expand=True)
+        tk.Label(seuils_frame, text="70", font=('Arial', 8),
+                fg=self.colors['warning'], bg=self.colors['card']).pack(side=tk.LEFT, expand=True)
         tk.Label(seuils_frame, text="100 dB", font=('Arial', 8),
                 fg=self.colors['danger'], bg=self.colors['card']).pack(side=tk.RIGHT)
 
         self.son_time_label = tk.Label(son_content, text="Aucune donnée",
-                                       font=('Arial', 10),
+                                       font=('Arial', 9),
                                        fg=self.colors['gray'],
                                        bg=self.colors['card'])
-        self.son_time_label.pack(pady=(10, 0))
+        self.son_time_label.pack(pady=(5, 0))
 
-        # Carte 2: Média
-        media_card_container = tk.Frame(top_frame, bg=self.colors['bg'])
-        media_card_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+        # Carte Compteur Médias
+        media_card_container = tk.Frame(right_frame, bg=self.colors['bg'])
+        media_card_container.pack(fill=tk.X, pady=5)
 
         media_card = self.creer_carte(media_card_container)
 
-        media_content = tk.Frame(media_card, bg=self.colors['card'], padx=30, pady=20)
+        media_content = tk.Frame(media_card, bg=self.colors['card'], padx=20, pady=15)
         media_content.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(media_content, text="📹 Captures Média",
-                font=('Arial', 14, 'bold'),
-                fg=self.colors['dark'], bg=self.colors['card']).pack(pady=(0, 10))
+        tk.Label(media_content, text="📹 Total Captures",
+                font=('Arial', 12, 'bold'),
+                fg=self.colors['dark'], bg=self.colors['card']).pack(pady=(0, 5))
 
         self.media_count_label = tk.Label(media_content, text="0",
-                                          font=('Arial', 40, 'bold'),
+                                          font=('Arial', 32, 'bold'),
                                           fg=self.colors['secondary'],
                                           bg=self.colors['card'])
-        self.media_count_label.pack(pady=10)
+        self.media_count_label.pack(pady=5)
 
-        tk.Label(media_content, text="Photo(s) / Vidéo(s)",
-                font=('Arial', 12),
+        tk.Label(media_content, text="Photo(s)",
+                font=('Arial', 10),
                 fg=self.colors['gray'],
                 bg=self.colors['card']).pack()
 
-        self.media_time_label = tk.Label(media_content, text="Dernière capture: --",
-                                         font=('Arial', 10),
+        self.media_time_label = tk.Label(media_content, text="Dernière: --",
+                                         font=('Arial', 9),
                                          fg=self.colors['gray'],
                                          bg=self.colors['card'])
-        self.media_time_label.pack(pady=(15, 0))
+        self.media_time_label.pack(pady=(10, 0))
 
-        # Carte 3: Événements récents
-        events_card_container = tk.Frame(frame, bg=self.colors['bg'])
-        events_card_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+        # Carte Événements récents (petit)
+        events_card_container = tk.Frame(right_frame, bg=self.colors['bg'])
+        events_card_container.pack(fill=tk.BOTH, expand=True, pady=5)
 
         events_card = self.creer_carte(events_card_container, "⚡ Événements Récents")
 
-        events_content = tk.Frame(events_card, bg=self.colors['card'], padx=20, pady=10)
+        events_content = tk.Frame(events_card, bg=self.colors['card'], padx=10, pady=5)
         events_content.pack(fill=tk.BOTH, expand=True)
 
         # Style pour le Treeview moderne
@@ -298,36 +421,284 @@ class InterfacePrincipaleModerne:
                        foreground=self.colors['dark'],
                        fieldbackground=self.colors['card'],
                        borderwidth=0,
-                       font=('Arial', 10))
+                       font=('Arial', 9))
         style.configure('Modern.Treeview.Heading',
                        background=self.colors['light'],
                        foreground=self.colors['dark'],
                        borderwidth=0,
-                       font=('Arial', 11, 'bold'))
+                       font=('Arial', 10, 'bold'))
         style.map('Modern.Treeview',
                  background=[('selected', self.colors['primary'])],
                  foreground=[('selected', 'white')])
 
-        # Liste des événements
-        columns = ('Type', 'Date', 'Description')
+        # Liste des événements (compacte)
+        columns = ('Type', 'Heure', 'Description')
         self.events_tree = ttk.Treeview(events_content, columns=columns,
-                                       show='headings', height=12,
+                                       show='headings', height=6,
                                        style='Modern.Treeview')
 
-        for col in columns:
-            self.events_tree.heading(col, text=col)
-            if col == 'Type':
-                self.events_tree.column(col, width=150)
-            elif col == 'Date':
-                self.events_tree.column(col, width=180)
+        self.events_tree.heading('Type', text='Type')
+        self.events_tree.heading('Heure', text='Heure')
+        self.events_tree.heading('Description', text='Description')
+
+        self.events_tree.column('Type', width=70)
+        self.events_tree.column('Heure', width=70)
+        self.events_tree.column('Description', width=150)
 
         self.events_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Scrollbar moderne
         scrollbar = ttk.Scrollbar(events_content, orient=tk.VERTICAL,
                                  command=self.events_tree.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.events_tree.configure(yscrollcommand=scrollbar.set)
+
+    def toggle_capture_photos(self):
+        """Démarre ou arrête la capture de photos"""
+        if self.capture_photo_running:
+            self.arreter_capture_photos()
+        else:
+            self.demarrer_capture_photos()
+
+    def toggle_capture_son(self):
+        """Démarre ou arrête la capture de son"""
+        if self.capture_son_running:
+            self.arreter_capture_son()
+        else:
+            self.demarrer_capture_son()
+
+    def demarrer_capture_photos(self):
+        """Démarre le script de capture photos en arrière-plan"""
+        try:
+            script_path = os.path.join(os.path.dirname(__file__), 'capture_photos_continu.py')
+            python_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'venv', 'bin', 'python')
+
+            if not os.path.exists(python_path):
+                python_path = 'python3'
+
+            self.capture_photo_process = subprocess.Popen(
+                [python_path, script_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                preexec_fn=os.setsid
+            )
+
+            self.capture_photo_running = True
+            self.btn_capture_photo.config(text='📷 Arrêter Capture Photos',
+                                          bg=self.colors['danger'])
+            self.update_capture_status()
+            print("✓ Capture photos démarrée")
+
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de démarrer la capture photos:\n{str(e)}")
+
+    def arreter_capture_photos(self):
+        """Arrête le script de capture photos"""
+        try:
+            if self.capture_photo_process:
+                os.killpg(os.getpgid(self.capture_photo_process.pid), signal.SIGTERM)
+                self.capture_photo_process = None
+
+            self.capture_photo_running = False
+            self.btn_capture_photo.config(text='📷 Démarrer Capture Photos',
+                                          bg=self.colors['success'])
+            self.update_capture_status()
+            print("✓ Capture photos arrêtée")
+
+        except Exception as e:
+            print(f"Erreur arrêt capture photos: {e}")
+            self.capture_photo_running = False
+
+    def demarrer_capture_son(self):
+        """Démarre le script de capture son en arrière-plan"""
+        try:
+            script_path = os.path.join(os.path.dirname(__file__), 'capture_son_continu.py')
+            python_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'venv', 'bin', 'python')
+
+            if not os.path.exists(python_path):
+                python_path = 'python3'
+
+            self.capture_son_process = subprocess.Popen(
+                [python_path, script_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                preexec_fn=os.setsid
+            )
+
+            self.capture_son_running = True
+            self.btn_capture_son.config(text='🎤 Arrêter Capture Son',
+                                        bg=self.colors['danger'])
+            self.update_capture_status()
+            print("✓ Capture son démarrée")
+
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de démarrer la capture son:\n{str(e)}")
+
+    def arreter_capture_son(self):
+        """Arrête le script de capture son"""
+        try:
+            if self.capture_son_process:
+                os.killpg(os.getpgid(self.capture_son_process.pid), signal.SIGTERM)
+                self.capture_son_process = None
+
+            self.capture_son_running = False
+            self.btn_capture_son.config(text='🎤 Démarrer Capture Son',
+                                        bg=self.colors['success'])
+            self.update_capture_status()
+            print("✓ Capture son arrêtée")
+
+        except Exception as e:
+            print(f"Erreur arrêt capture son: {e}")
+            self.capture_son_running = False
+
+    def toggle_video(self):
+        """Démarre ou arrête l'enregistrement vidéo local"""
+        if self.video_running:
+            self.arreter_video()
+        else:
+            self.demarrer_video()
+
+    def demarrer_video(self):
+        """Démarre l'enregistrement vidéo local avec rpicam-vid"""
+        try:
+            # Créer le dossier de sortie s'il n'existe pas
+            if not os.path.exists(self.video_output_dir):
+                os.makedirs(self.video_output_dir)
+
+            # Nom du fichier avec timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            video_filename = f"video_{timestamp}.h264"
+            self.video_output_path = os.path.join(self.video_output_dir, video_filename)
+
+            # Lancer rpicam-vid pour enregistrer en continu
+            # -t 0 = durée infinie, -o = fichier de sortie
+            self.video_process = subprocess.Popen(
+                ['rpicam-vid', '-t', '0', '-o', self.video_output_path,
+                 '--width', '1920', '--height', '1080', '--framerate', '30'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                preexec_fn=os.setsid
+            )
+
+            self.video_running = True
+            self.btn_video.config(text='🎬 Arrêter Vidéo',
+                                  bg=self.colors['danger'])
+            self.update_capture_status()
+            print(f"✓ Enregistrement vidéo démarré: {self.video_output_path}")
+            messagebox.showinfo("Vidéo", f"Enregistrement démarré:\n{video_filename}")
+
+        except FileNotFoundError:
+            messagebox.showerror("Erreur", "rpicam-vid non trouvé.\nVérifiez que rpicam-apps est installé.")
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible de démarrer la vidéo:\n{str(e)}")
+
+    def arreter_video(self):
+        """Arrête l'enregistrement vidéo"""
+        try:
+            if self.video_process:
+                os.killpg(os.getpgid(self.video_process.pid), signal.SIGTERM)
+                self.video_process.wait(timeout=5)
+                self.video_process = None
+
+            self.video_running = False
+            self.btn_video.config(text='🎬 Démarrer Vidéo',
+                                  bg=self.colors['secondary'])
+            self.update_capture_status()
+
+            # Afficher le chemin du fichier sauvegardé
+            if hasattr(self, 'video_output_path') and os.path.exists(self.video_output_path):
+                size_mb = os.path.getsize(self.video_output_path) / (1024 * 1024)
+                print(f"✓ Vidéo sauvegardée: {self.video_output_path} ({size_mb:.1f} MB)")
+                messagebox.showinfo("Vidéo sauvegardée",
+                                   f"Fichier: {os.path.basename(self.video_output_path)}\n"
+                                   f"Taille: {size_mb:.1f} MB\n"
+                                   f"Dossier: {self.video_output_dir}")
+
+        except subprocess.TimeoutExpired:
+            if self.video_process:
+                os.killpg(os.getpgid(self.video_process.pid), signal.SIGKILL)
+            self.video_running = False
+        except Exception as e:
+            print(f"Erreur arrêt vidéo: {e}")
+            self.video_running = False
+
+    def update_capture_status(self):
+        """Met à jour le label de status des captures"""
+        status_parts = []
+        if self.capture_photo_running:
+            status_parts.append("📷 Photos")
+        if self.capture_son_running:
+            status_parts.append("🎤 Son")
+        if self.video_running:
+            status_parts.append("🎬 Vidéo")
+
+        if status_parts:
+            self.capture_status_label.config(
+                text=f"▶️ En cours: {' + '.join(status_parts)}",
+                fg=self.colors['success'])
+        else:
+            self.capture_status_label.config(
+                text="⏹️ Captures arrêtées",
+                fg=self.colors['gray'])
+
+    def charger_photo_temps_reel(self):
+        """Charge et affiche la dernière photo en temps réel"""
+        try:
+            # Récupérer la dernière photo
+            photo_data = self.db.execute_query("""
+                SELECT TOP 1 d.idDonnee_PK, d.photoBlob, d.dateHeure
+                FROM Donnees d
+                JOIN Capteur c ON d.idCapteur = c.idCapteur_PK
+                WHERE c.type = N'CAMERA' AND d.photoBlob IS NOT NULL
+                ORDER BY d.dateHeure DESC
+            """)
+
+            if photo_data and photo_data[0][1]:
+                photo_id = photo_data[0][0]
+                photo_blob = photo_data[0][1]
+                date = photo_data[0][2]
+
+                # Vérifier si c'est une nouvelle photo
+                if photo_id != self.derniere_photo_id:
+                    self.derniere_photo_id = photo_id
+
+                    # Charger l'image
+                    image = Image.open(BytesIO(photo_blob))
+
+                    # Obtenir les dimensions du canvas
+                    canvas_width = self.photo_canvas.winfo_width()
+                    canvas_height = self.photo_canvas.winfo_height()
+
+                    if canvas_width > 1 and canvas_height > 1:
+                        # Redimensionner en gardant le ratio
+                        img_ratio = image.width / image.height
+                        canvas_ratio = canvas_width / canvas_height
+
+                        if img_ratio > canvas_ratio:
+                            new_width = canvas_width
+                            new_height = int(canvas_width / img_ratio)
+                        else:
+                            new_height = canvas_height
+                            new_width = int(canvas_height * img_ratio)
+
+                        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+                    # Convertir pour Tkinter
+                    self.photo_temps_reel = ImageTk.PhotoImage(image)
+
+                    # Effacer et afficher
+                    self.photo_canvas.delete("all")
+                    self.photo_canvas.create_image(
+                        canvas_width // 2, canvas_height // 2,
+                        image=self.photo_temps_reel, anchor=tk.CENTER
+                    )
+
+                    # Mettre à jour le label d'info
+                    self.photo_info_label.config(
+                        text=f"📅 {date.strftime('%Y-%m-%d %H:%M:%S')} | ID: {photo_id}",
+                        fg=self.colors['dark'])
+
+        except Exception as e:
+            print(f"Erreur chargement photo temps réel: {e}")
 
     def creer_onglet_historique(self):
         """Crée l'onglet d'historique moderne"""
@@ -348,15 +719,10 @@ class InterfacePrincipaleModerne:
 
         self.hist_type_var = tk.StringVar(value="TOUS")
 
-        # Style moderne pour combobox
-        style = ttk.Style()
-        style.configure('Modern.TCombobox', fieldbackground=self.colors['light'])
-
         type_combo = ttk.Combobox(controls_frame, textvariable=self.hist_type_var,
                                  values=["TOUS", "BRUIT", "CAMERA"],
                                  width=15, state='readonly',
-                                 font=('Arial', 10),
-                                 style='Modern.TCombobox')
+                                 font=('Arial', 10))
         type_combo.pack(side=tk.LEFT, padx=10)
 
         btn_charger = tk.Button(controls_frame, text="📥 Charger les données",
@@ -370,9 +736,6 @@ class InterfacePrincipaleModerne:
                                command=self.charger_historique,
                                padx=20, pady=8)
         btn_charger.pack(side=tk.LEFT, padx=10)
-
-        btn_charger.bind('<Enter>', lambda e: btn_charger.config(bg='#059669'))
-        btn_charger.bind('<Leave>', lambda e: btn_charger.config(bg=self.colors['success']))
 
         # Carte pour l'historique
         hist_container = tk.Frame(frame, bg=self.colors['bg'])
@@ -407,7 +770,6 @@ class InterfacePrincipaleModerne:
         frame = tk.Frame(self.notebook, bg=self.colors['bg'])
         self.notebook.add(frame, text="📈 Statistiques")
 
-        # Bouton actualiser en haut
         top_frame = tk.Frame(frame, bg=self.colors['bg'])
         top_frame.pack(fill=tk.X, padx=15, pady=10)
 
@@ -423,10 +785,6 @@ class InterfacePrincipaleModerne:
                                    padx=25, pady=10)
         btn_actualiser.pack()
 
-        btn_actualiser.bind('<Enter>', lambda e: btn_actualiser.config(bg=self.colors['secondary']))
-        btn_actualiser.bind('<Leave>', lambda e: btn_actualiser.config(bg=self.colors['primary']))
-
-        # Carte pour les statistiques
         stats_container = tk.Frame(frame, bg=self.colors['bg'])
         stats_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
 
@@ -442,7 +800,6 @@ class InterfacePrincipaleModerne:
                                  padx=20, pady=20)
         self.stats_text.pack(fill=tk.BOTH, expand=True)
 
-        # Charger les stats au démarrage
         self.charger_statistiques()
 
     def creer_onglet_graphique(self):
@@ -450,7 +807,6 @@ class InterfacePrincipaleModerne:
         frame = tk.Frame(self.notebook, bg=self.colors['bg'])
         self.notebook.add(frame, text="📈 Graphique")
 
-        # Contrôles en haut
         controls_container = tk.Frame(frame, bg=self.colors['bg'])
         controls_container.pack(fill=tk.X, padx=15, pady=10)
 
@@ -473,18 +829,12 @@ class InterfacePrincipaleModerne:
                                       font=('Arial', 10, 'bold'),
                                       fg='white',
                                       bg=self.colors['primary'],
-                                      activebackground=self.colors['secondary'],
-                                      activeforeground='white',
                                       relief=tk.FLAT,
                                       cursor='hand2',
                                       command=self.charger_graphique,
                                       padx=20, pady=8)
         btn_refresh_graph.pack(side=tk.LEFT, padx=10)
 
-        btn_refresh_graph.bind('<Enter>', lambda e: btn_refresh_graph.config(bg=self.colors['secondary']))
-        btn_refresh_graph.bind('<Leave>', lambda e: btn_refresh_graph.config(bg=self.colors['primary']))
-
-        # Carte pour le graphique
         graph_container = tk.Frame(frame, bg=self.colors['bg'])
         graph_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
 
@@ -492,7 +842,6 @@ class InterfacePrincipaleModerne:
         graph_content = tk.Frame(graph_card, bg=self.colors['card'], padx=20, pady=10)
         graph_content.pack(fill=tk.BOTH, expand=True)
 
-        # Créer la figure matplotlib
         self.fig = Figure(figsize=(10, 6), dpi=100)
         self.fig.patch.set_facecolor(self.colors['card'])
         self.ax = self.fig.add_subplot(111)
@@ -500,7 +849,6 @@ class InterfacePrincipaleModerne:
         self.canvas_graph = FigureCanvasTkAgg(self.fig, graph_content)
         self.canvas_graph.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # Charger le graphique initial
         self.charger_graphique()
 
     def creer_onglet_galerie(self):
@@ -508,7 +856,6 @@ class InterfacePrincipaleModerne:
         frame = tk.Frame(self.notebook, bg=self.colors['bg'])
         self.notebook.add(frame, text="📷 Galerie")
 
-        # Contrôles
         controls_container = tk.Frame(frame, bg=self.colors['bg'])
         controls_container.pack(fill=tk.X, padx=15, pady=10)
 
@@ -524,18 +871,12 @@ class InterfacePrincipaleModerne:
                                         font=('Arial', 10, 'bold'),
                                         fg='white',
                                         bg=self.colors['success'],
-                                        activebackground='#059669',
-                                        activeforeground='white',
                                         relief=tk.FLAT,
                                         cursor='hand2',
                                         command=self.charger_galerie,
                                         padx=20, pady=8)
         btn_refresh_gallery.pack(side=tk.LEFT, padx=10)
 
-        btn_refresh_gallery.bind('<Enter>', lambda e: btn_refresh_gallery.config(bg='#059669'))
-        btn_refresh_gallery.bind('<Leave>', lambda e: btn_refresh_gallery.config(bg=self.colors['success']))
-
-        # Carte pour la galerie
         gallery_container = tk.Frame(frame, bg=self.colors['bg'])
         gallery_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
 
@@ -543,31 +884,19 @@ class InterfacePrincipaleModerne:
         gallery_content = tk.Frame(gallery_card, bg=self.colors['card'], padx=20, pady=10)
         gallery_content.pack(fill=tk.BOTH, expand=True)
 
-        # Frame scrollable simple pour la galerie
         self.gallery_frame = tk.Frame(gallery_content, bg=self.colors['card'])
         self.gallery_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Charger la galerie
         self.charger_galerie()
 
     def charger_graphique(self):
         """Charge et affiche le graphique du niveau sonore"""
         try:
-            # Effacer le graphique précédent
             self.ax.clear()
 
-            # Déterminer la période
             period_str = self.graph_period_var.get()
-            hours = {
-                "30min": 0.5,
-                "1h": 1,
-                "3h": 3,
-                "6h": 6,
-                "12h": 12,
-                "24h": 24
-            }.get(period_str, 1)
+            hours = {"30min": 0.5, "1h": 1, "3h": 3, "6h": 6, "12h": 12, "24h": 24}.get(period_str, 1)
 
-            # Récupérer les données
             date_debut = datetime.now() - timedelta(hours=hours)
 
             donnees = self.db.execute_query("""
@@ -583,15 +912,10 @@ class InterfacePrincipaleModerne:
                 dates = [row[0] for row in donnees]
                 mesures = [row[1] for row in donnees]
 
-                # Tracer le graphique
                 self.ax.plot(dates, mesures, color=self.colors['primary'], linewidth=2, marker='o', markersize=4)
-
-                # Zones de couleur
                 self.ax.axhspan(0, 50, facecolor=self.colors['success'], alpha=0.1)
                 self.ax.axhspan(50, 70, facecolor=self.colors['warning'], alpha=0.1)
                 self.ax.axhspan(70, 100, facecolor=self.colors['danger'], alpha=0.1)
-
-                # Lignes de seuil
                 self.ax.axhline(y=50, color=self.colors['success'], linestyle='--', linewidth=1, alpha=0.5)
                 self.ax.axhline(y=70, color=self.colors['danger'], linestyle='--', linewidth=1, alpha=0.5)
 
@@ -600,8 +924,6 @@ class InterfacePrincipaleModerne:
                 self.ax.set_title(f'Évolution du niveau sonore - Dernières {period_str}', fontsize=12, fontweight='bold')
                 self.ax.grid(True, alpha=0.3)
                 self.ax.set_facecolor(self.colors['light'])
-
-                # Format des dates
                 self.fig.autofmt_xdate()
             else:
                 self.ax.text(0.5, 0.5, 'Aucune donnée disponible',
@@ -611,18 +933,13 @@ class InterfacePrincipaleModerne:
 
         except Exception as e:
             print(f"Erreur chargement graphique: {e}")
-            self.ax.text(0.5, 0.5, f'Erreur: {str(e)}',
-                       ha='center', va='center', fontsize=12, color=self.colors['danger'])
-            self.canvas_graph.draw()
 
     def charger_galerie(self):
         """Charge les dernières photos dans la galerie"""
         try:
-            # Vider la galerie
             for widget in self.gallery_frame.winfo_children():
                 widget.destroy()
 
-            # Récupérer les 12 dernières photos
             photos = self.db.execute_query("""
                 SELECT TOP 12 d.idDonnee_PK, d.photoBlob, d.dateHeure
                 FROM Donnees d
@@ -634,29 +951,23 @@ class InterfacePrincipaleModerne:
             if photos:
                 row_frame = None
                 for idx, (photo_id, photo_blob, date) in enumerate(photos):
-                    # Créer une nouvelle ligne tous les 3 éléments
                     if idx % 3 == 0:
                         row_frame = tk.Frame(self.gallery_frame, bg=self.colors['card'])
                         row_frame.pack(fill=tk.X, pady=5)
 
-                    # Container pour la photo
                     photo_container = tk.Frame(row_frame, bg=self.colors['border'],
                                               relief=tk.RAISED, borderwidth=2)
                     photo_container.pack(side=tk.LEFT, padx=10, pady=5)
 
                     try:
-                        # Charger l'image
                         image = Image.open(BytesIO(photo_blob))
-                        # Redimensionner
                         image.thumbnail((300, 200), Image.Resampling.LANCZOS)
                         photo = ImageTk.PhotoImage(image)
 
-                        # Label pour l'image
                         img_label = tk.Label(photo_container, image=photo, bg=self.colors['card'])
-                        img_label.image = photo  # Garder une référence
+                        img_label.image = photo
                         img_label.pack()
 
-                        # Info sous l'image
                         info_frame = tk.Frame(photo_container, bg=self.colors['card'])
                         info_frame.pack(fill=tk.X, padx=5, pady=5)
 
@@ -668,7 +979,7 @@ class InterfacePrincipaleModerne:
 
                     except Exception as e:
                         tk.Label(photo_container,
-                                text=f"❌ Erreur\n{str(e)[:20]}",
+                                text=f"❌ Erreur",
                                 font=('Arial', 10),
                                 fg=self.colors['danger'],
                                 bg=self.colors['card'],
@@ -682,11 +993,6 @@ class InterfacePrincipaleModerne:
 
         except Exception as e:
             print(f"Erreur chargement galerie: {e}")
-            tk.Label(self.gallery_frame,
-                    text=f"Erreur: {str(e)}",
-                    font=('Arial', 12),
-                    fg=self.colors['danger'],
-                    bg=self.colors['card']).pack(pady=50)
 
     def animer_barre_son(self):
         """Anime la barre de son avec transition fluide"""
@@ -694,42 +1000,28 @@ class InterfacePrincipaleModerne:
             return
 
         try:
-            # Interpolation fluide vers la valeur cible
             diff = self.niveau_son_cible - self.niveau_son_actuel
             if abs(diff) > 0.5:
-                # Animation progressive
                 self.niveau_son_actuel += diff * 0.3
             else:
                 self.niveau_son_actuel = self.niveau_son_cible
 
-            # Récupérer la largeur du canvas
             canvas_width = self.son_canvas.winfo_width()
             if canvas_width <= 1:
-                canvas_width = 400  # Valeur par défaut
+                canvas_width = 350
 
-            canvas_height = 40
-
-            # Effacer le canvas
+            canvas_height = 35
             self.son_canvas.delete("all")
 
-            # Dessiner les zones de fond (seuils)
             width_50 = int(canvas_width * 0.5)
             width_70 = int(canvas_width * 0.7)
 
-            # Zone verte (0-50 dB)
-            self.son_canvas.create_rectangle(0, 0, width_50, canvas_height,
-                                            fill='#d1fae5', outline='')
-            # Zone orange (50-70 dB)
-            self.son_canvas.create_rectangle(width_50, 0, width_70, canvas_height,
-                                            fill='#fed7aa', outline='')
-            # Zone rouge (70-100 dB)
-            self.son_canvas.create_rectangle(width_70, 0, canvas_width, canvas_height,
-                                            fill='#fecaca', outline='')
+            self.son_canvas.create_rectangle(0, 0, width_50, canvas_height, fill='#d1fae5', outline='')
+            self.son_canvas.create_rectangle(width_50, 0, width_70, canvas_height, fill='#fed7aa', outline='')
+            self.son_canvas.create_rectangle(width_70, 0, canvas_width, canvas_height, fill='#fecaca', outline='')
 
-            # Calculer la largeur de la barre actuelle
             bar_width = int((min(100, self.niveau_son_actuel) / 100) * canvas_width)
 
-            # Choisir la couleur selon le niveau
             if self.niveau_son_actuel > 70:
                 bar_color = self.colors['danger']
             elif self.niveau_son_actuel > 50:
@@ -737,44 +1029,23 @@ class InterfacePrincipaleModerne:
             else:
                 bar_color = self.colors['success']
 
-            # Dessiner la barre principale avec dégradé (effet de brillance)
             if bar_width > 0:
-                # Barre principale
-                self.son_canvas.create_rectangle(0, 0, bar_width, canvas_height,
-                                                fill=bar_color, outline='')
-
-                # Effet de brillance (gradient supérieur)
+                self.son_canvas.create_rectangle(0, 0, bar_width, canvas_height, fill=bar_color, outline='')
                 gradient_height = int(canvas_height * 0.4)
                 self.son_canvas.create_rectangle(0, 0, bar_width, gradient_height,
                                                 fill='white', outline='', stipple='gray50')
 
-                # Bordure de la barre
-                self.son_canvas.create_rectangle(0, 0, bar_width, canvas_height,
-                                                outline=bar_color, width=2)
-
-            # Ajouter des marqueurs de seuils
-            # Ligne à 50 dB
             line_50 = int(canvas_width * 0.5)
             self.son_canvas.create_line(line_50, 0, line_50, canvas_height,
                                        fill=self.colors['success'], width=2, dash=(5, 5))
 
-            # Ligne à 70 dB
             line_70 = int(canvas_width * 0.7)
             self.son_canvas.create_line(line_70, 0, line_70, canvas_height,
                                        fill=self.colors['danger'], width=2, dash=(5, 5))
 
-            # Ajouter des pics d'amplitude si le son est fort
-            if self.niveau_son_actuel > 60:
-                import random
-                for _ in range(3):
-                    x = random.randint(0, max(1, bar_width - 5))
-                    self.son_canvas.create_oval(x, 5, x+10, 15,
-                                               fill='white', outline='', stipple='gray25')
-
         except Exception as e:
-            print(f"Erreur animation barre son: {e}")
+            pass
 
-        # Répéter l'animation (60 FPS = ~16ms)
         if self.en_cours:
             self.root.after(16, self.animer_barre_son)
 
@@ -799,17 +1070,9 @@ class InterfacePrincipaleModerne:
                     date = son[0][1]
 
                     self.son_value_label.config(text=f"{niveau:.1f} dB")
-                    self.son_time_label.config(text=f"Dernière mesure: {date.strftime('%H:%M:%S')}")
-
-                    # Mettre à jour la cible pour l'animation
+                    self.son_time_label.config(text=f"Dernière: {date.strftime('%H:%M:%S')}")
                     self.niveau_son_cible = niveau
 
-                    # Ajouter à l'historique
-                    self.historique_son.append(niveau)
-                    if len(self.historique_son) > 50:
-                        self.historique_son.pop(0)
-
-                    # Couleur selon le niveau
                     if niveau > 70:
                         self.son_value_label.config(fg=self.colors['danger'])
                     elif niveau > 50:
@@ -839,12 +1102,14 @@ class InterfacePrincipaleModerne:
 
                 if last_media:
                     self.media_time_label.config(
-                        text=f"Dernière capture: {last_media[0][0].strftime('%H:%M:%S')}")
+                        text=f"Dernière: {last_media[0][0].strftime('%H:%M:%S')}")
+
+                # Charger la photo en temps réel
+                self.charger_photo_temps_reel()
 
                 # Derniers événements
                 self.charger_evenements_recents()
 
-                # Mettre à jour le label de dernière mise à jour
                 self.last_update_label.config(
                     text=f"⏰ Dernière mise à jour: {datetime.now().strftime('%H:%M:%S')}")
 
@@ -854,20 +1119,17 @@ class InterfacePrincipaleModerne:
                 print(f"Erreur rafraîchissement: {e}")
                 self.status_indicator.config(text="● Erreur connexion", fg=self.colors['danger'])
 
-        # Programmer le prochain rafraîchissement
         if self.en_cours:
             self.root.after(self.refresh_interval, self.rafraichir_donnees)
 
     def charger_evenements_recents(self):
         """Charge les événements récents"""
         try:
-            # Vider la liste
             for item in self.events_tree.get_children():
                 self.events_tree.delete(item)
 
-            # Charger les derniers événements
             events = self.db.execute_query("""
-                SELECT TOP 20
+                SELECT TOP 10
                     e.type,
                     d.dateHeure,
                     e.description
@@ -878,12 +1140,8 @@ class InterfacePrincipaleModerne:
 
             for event in events:
                 type_event = event[0]
-                date = event[1].strftime('%Y-%m-%d %H:%M:%S') if event[1] else ''
-                desc = event[2] if event[2] else ''
-
-                # Tronquer la description si trop longue
-                if len(desc) > 100:
-                    desc = desc[:97] + "..."
+                date = event[1].strftime('%H:%M:%S') if event[1] else ''
+                desc = event[2][:30] + "..." if event[2] and len(event[2]) > 30 else (event[2] or '')
 
                 self.events_tree.insert('', tk.END, values=(type_event, date, desc))
 
@@ -897,13 +1155,11 @@ class InterfacePrincipaleModerne:
     def charger_historique(self):
         """Charge l'historique selon le type sélectionné"""
         try:
-            # Vider la liste
             for item in self.hist_tree.get_children():
                 self.hist_tree.delete(item)
 
             type_filtre = self.hist_type_var.get()
 
-            # Construire la requête
             if type_filtre == "TOUS":
                 where_clause = ""
             else:
@@ -950,19 +1206,16 @@ class InterfacePrincipaleModerne:
         try:
             self.stats_text.delete('1.0', tk.END)
 
-            # Stats générales
             stats = []
             stats.append("=" * 60)
             stats.append("STATISTIQUES GÉNÉRALES - SalleSense")
             stats.append("=" * 60)
             stats.append("")
 
-            # Nombre total de données
             count = self.db.execute_query("SELECT COUNT(*) FROM Donnees")
             stats.append(f"📊 Nombre total de mesures: {count[0][0]:,}")
             stats.append("")
 
-            # Par type de capteur
             by_type = self.db.execute_query("""
                 SELECT c.type, COUNT(*) AS nb
                 FROM Donnees d
@@ -976,7 +1229,6 @@ class InterfacePrincipaleModerne:
                 stats.append(f"  • {row[0]:15} : {row[1]:,} mesures")
             stats.append("")
 
-            # Événements
             events_count = self.db.execute_query("""
                 SELECT type, COUNT(*) AS nb
                 FROM Evenement
@@ -990,7 +1242,6 @@ class InterfacePrincipaleModerne:
                 stats.append(f"  • {row[0]:15} : {row[1]:,} événements")
             stats.append("")
 
-            # Niveau sonore moyen/max
             son_stats = self.db.execute_query("""
                 SELECT
                     AVG(d.mesure) AS moyenne,
@@ -1013,7 +1264,6 @@ class InterfacePrincipaleModerne:
             stats.append(f"Généré le: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             stats.append("=" * 60)
 
-            # Afficher
             self.stats_text.insert('1.0', '\n'.join(stats))
 
         except Exception as e:
@@ -1027,6 +1277,15 @@ class InterfacePrincipaleModerne:
     def fermer(self, ouvrir_connexion=False):
         """Ferme l'application"""
         self.en_cours = False
+
+        # Arrêter les captures en cours
+        if self.capture_photo_running:
+            self.arreter_capture_photos()
+        if self.capture_son_running:
+            self.arreter_capture_son()
+        if self.video_running:
+            self.arreter_video()
+
         self.root.destroy()
 
         if ouvrir_connexion:
@@ -1040,7 +1299,6 @@ class InterfacePrincipaleModerne:
 
 
 if __name__ == "__main__":
-    # Pour tester directement
     from db_connection import DatabaseConnection
     from config import DB_SERVER, DB_NAME, DB_USERNAME, DB_PASSWORD
 

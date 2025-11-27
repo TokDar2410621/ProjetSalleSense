@@ -36,6 +36,14 @@ cd sallesense
 # Run the application (starts on https://localhost:5001)
 dotnet run
 
+# Run with specific environment (Home, School, or Development)
+# Windows PowerShell:
+$env:ASPNETCORE_ENVIRONMENT="Home"; dotnet run
+# Or use convenience scripts:
+./run-home.bat     # Uses LocalDB
+./run-school.bat   # Uses school SQL Server
+./run-dev.bat      # Development environment
+
 # Build the project
 dotnet build
 
@@ -140,14 +148,42 @@ sallesense/
 ```
 pythonRAs/
 ├── db_connection.py                      # Database wrapper with auth methods
+├── config.py                             # Configuration management
+├── db_config.json                        # Saved connection settings (no passwords)
+│
+├── PRODUCTION MONITORING (Raspberry Pi):
+├── lancer_interface.py                   # GUI launcher (entry point)
 ├── interface_connexion.py                # Login GUI
-├── interface_principale.py               # Main monitoring dashboard
-├── lancer_interface.py                   # GUI launcher
-├── capture_photos_continu.py             # Camera monitoring (Raspberry Pi)
-├── capture_son_continu.py                # Audio monitoring (Raspberry Pi)
+├── interface_principale.py               # Main monitoring dashboard (44KB - complex)
+├── capture_photos_continu.py             # Camera monitoring with LED indicators
+├── capture_son_continu.py                # Audio level monitoring
 ├── surveillance_intelligente.py          # Intelligent monitoring system
-└── db_config.json                        # Saved connection settings (no passwords)
+│
+├── DEVELOPMENT/TESTING:
+├── inserer_screenshots.py                # Bulk insert photos from filesystem
+├── test_photos_bd.py                     # Photo BLOB diagnostic
+├── test_envoi_donnees.py                 # Test sensor data insertion
+├── test_animation_barre.py               # Audio level bar animation test
+├── verif_quick.py                        # Quick connectivity check
+├── visualiser_photos.py                  # Export photos from database
+├── visualiser_videos.py                  # Video data viewer
+├── sensor_monitor.py                     # Generic sensor monitoring
+│
+├── UTILITIES:
+├── initialiser_bd.py                     # Database initialization
+├── exemple_get_user.py                   # User retrieval example
+├── boutton.py                            # GPIO button example
+├── labo.py                               # Laboratory/testing script
+└── proto-final.py                        # Prototype script
 ```
+
+**Key Python Scripts**:
+- **lancer_interface.py**: Main entry point, launches authentication then dashboard
+- **interface_principale.py**: Complex 45KB Tkinter GUI with real-time sensor monitoring
+- **capture_photos_continu.py**: Runs on Raspberry Pi, captures photos continuously, controls green/red LEDs
+- **capture_son_continu.py**: Audio level monitoring with dB calculation
+- **surveillance_intelligente.py**: Smart monitoring with anomaly detection
+- **inserer_screenshots.py**: Utility to populate database with test photos (supports LocalDB + SQL Server)
 
 ### Database Schema
 
@@ -201,14 +237,20 @@ EXEC dbo.usp_Utilisateur_Login
 
 ### Service Layer Pattern
 
-The web application uses scoped services registered in [Startup.cs](sallesense/Startup.cs):
+The web application uses scoped services registered in [Startup.cs](sallesense/Startup.cs). All services use `IDbContextFactory<Prog3A25BdSalleSenseContext>` for database access (supports concurrent operations in Blazor Server).
 
-- **AuthService**: User registration and login (calls stored procedures)
-- **PhotoService**: Retrieves sensor photo/video data
-- **ReservationService**: Reservation CRUD operations
+**Core Services** ([Services/](sallesense/Services/)):
+- **AuthService**: User registration and login (calls stored procedures `usp_Utilisateur_Create`, `usp_Utilisateur_Login`)
+- **AdminService**: User management, blacklist operations
+- **ReservationService**: Reservation CRUD with overlap validation
+- **ReservationFormService**: Reservation form logic and available rooms
+- **ModifierReservationService**: Edit existing reservations
+- **PhotoService**: Photo BLOB retrieval from database (see BLOB handling notes below)
+- **ProfilService**: User profile management, password changes
+- **DashboardService**: Statistics and dashboard data aggregation
+- **SalleDetailsService**: Room details and sensor data
+- **HomeService**: Home page data
 - **CustomAuthenticationStateProvider**: Blazor authentication state with ProtectedSessionStorage
-
-All services use `IDbContextFactory<Prog3A25BdSalleSenseContext>` for database access (supports concurrent operations in Blazor Server).
 
 ### Python IoT Architecture
 
@@ -222,13 +264,68 @@ Python scripts connect directly to SQL Server using pyodbc:
 
 ## Development Workflow
 
-### Adding a New Blazor Page
+### Adding a New Blazor Page (Code-Behind Pattern)
 
-1. Create `.razor` file in `sallesense/Pages/`
-2. Add `@page "/route"` directive at the top
-3. Inject required services: `@inject AuthService AuthService`
-4. Add navigation link in `sallesense/Shared/NavMenu.razor`
-5. Use `NavigationManager.NavigateTo()` for programmatic navigation
+**Important**: This project uses the code-behind pattern to separate markup from logic (see MODIFICATIONS.md for rationale).
+
+**Create the Razor view** (`Pages/MyPage.razor`):
+```razor
+@page "/my-route"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<!-- HTML markup only - no @code blocks -->
+<h1>@Title</h1>
+<button @onclick="HandleClick">Click Me</button>
+```
+
+**Create the code-behind** (`Pages/MyPage.razor.cs`):
+```csharp
+using System;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Components;
+using SallseSense.Services;
+
+namespace SallseSense.Pages
+{
+    public partial class MyPage : ComponentBase
+    {
+        [Inject]
+        protected MyService MyService { get; set; } = default!;
+
+        [Inject]
+        protected NavigationManager Navigation { get; set; } = default!;
+
+        protected string Title { get; set; } = "My Page";
+
+        protected override async Task OnInitializedAsync()
+        {
+            // Initialization logic
+        }
+
+        protected async Task HandleClick()
+        {
+            // Event handler logic
+        }
+    }
+}
+```
+
+**Add navigation** in `sallesense/Shared/NavMenu.razor`:
+```razor
+<div class="nav-item px-3">
+    <NavLink class="nav-link" href="/my-route">
+        <span class="oi oi-icon" aria-hidden="true"></span> My Page
+    </NavLink>
+</div>
+```
+
+**Benefits of code-behind pattern**:
+- Separation of concerns (markup vs logic)
+- Better testability
+- Improved IntelliSense in .cs files
+- Easier to maintain and navigate
+- Follows ASP.NET Core MVC conventions
 
 ### Modifying Database Schema
 
@@ -300,9 +397,86 @@ USERNAME = "prog3e09"
 PASSWORD = "colonne42"  # Example - use your credentials
 ```
 
+## Working with Photo BLOBs
+
+Photos are stored as `VARBINARY(MAX)` in the `Donnees` table. **Critical LINQ-to-SQL limitation**:
+
+**❌ WRONG - Will throw InvalidOperationException**:
+```csharp
+var photos = await context.Donnees
+    .Where(d => d.PhotoBlob != null && d.PhotoBlob.Length > 0)  // Error: .Length not translatable
+    .Select(d => new PhotoInfo { Size = d.PhotoBlob.Length })
+    .ToListAsync();
+```
+
+**✅ CORRECT - Load into memory first**:
+```csharp
+// Step 1: Retrieve from database
+var donnees = await context.Donnees
+    .Where(d => d.PhotoBlob != null)
+    .ToListAsync();
+
+// Step 2: Filter and project in memory
+var photos = donnees
+    .Where(d => d.PhotoBlob.Length > 0)
+    .Select(d => new PhotoInfo {
+        Id = d.IdDonneePk,
+        Size = d.PhotoBlob.Length  // Now works because data is in memory
+    })
+    .ToList();
+```
+
+**Photo API Endpoint**: `GET /api/photo/{id}` ([Controllers/PhotoController.cs](sallesense/Controllers/PhotoController.cs))
+- Auto-detects JPEG/PNG via magic bytes
+- Returns appropriate Content-Type
+- Used in views: `<img src="/api/photo/@photoId" />`
+
+**Inserting photos** (Python): Use [inserer_screenshots.py](pythonRAs/inserer_screenshots.py) to bulk insert photos from filesystem.
+
+## Testing
+
+### Test Data Scripts
+
+Execute these in order to set up test data ([GUIDE_TESTS.md](GUIDE_TESTS.md)):
+
+```bash
+cd Script_bd
+
+# 1. Create 3 test rooms
+sqlcmd -S (localdb)\MSSQLLocalDB -d Prog3A25_bdSalleSense -i Insert_3_Salles.sql
+
+# 2. Add sensors and sample data
+sqlcmd -S (localdb)\MSSQLLocalDB -d Prog3A25_bdSalleSense -i Insert_Capteurs_Donnees.sql
+
+# 3. Setup admin role and test users
+sqlcmd -S (localdb)\MSSQLLocalDB -d Prog3A25_bdSalleSense -i Ajout_Role_Admin.sql
+```
+
+**Test accounts created**:
+- **Admin**: tokamdaruis@gmail.com (your existing password)
+- **Test User**: user.test@example.com / test123
+
+### Key Test Scenarios
+
+1. **Reservation overlap prevention**: Create reservation, then try overlapping time slot (should fail via `trg_pasDeChevauchement`)
+2. **Blacklist enforcement**: Admin blacklists user → user cannot login (`usp_Utilisateur_Login` returns -2)
+3. **Capacity validation**: Reserve room with more people than capacity → validation error
+4. **Photo display**: Visit `/salle-details/1` → should show camera photos in archive section
+5. **Admin functions**: Only visible to users with `role = 'Admin'`
+
+### Python Testing Scripts
+
+- `test_photos_bd.py` - Verify photo BLOBs in database
+- `test_envoi_donnees.py` - Test sensor data insertion
+- `verif_quick.py` - Quick database connectivity check
+- `visualiser_photos.py` - Export and view photos from database
+- `visualiser_videos.py` - Video data viewer
+
 ## Important Notes
 
 - **Never manually edit scaffolded models** in `sallesense/Models/` - they will be overwritten
+- **Use code-behind pattern** for all new Blazor pages (`.razor` + `.razor.cs`)
+- **BLOB queries**: Always load BLOBs into memory before accessing `.Length` property
 - **Blazor Server uses SignalR** - be aware of connection lifetime and state management
 - **Python scripts require Raspberry Pi hardware** for GPIO operations (picamera2, RPi.GPIO)
 - **Stored procedures must return values** - use OUTPUT parameters or RETURN statements
@@ -310,14 +484,31 @@ PASSWORD = "colonne42"  # Example - use your credentials
 - **French naming in database is intentional** - do not anglicize column names
 - **Triggers enforce data integrity** - test reservation overlaps and blacklist scenarios
 - **Passwords are never stored in config files** in Python scripts (security best practice)
+- **Environment matters**: LocalDB (Home) vs SQL Server (School/Dev) have different data
+- **Multiple appsettings files**: appsettings.Home.json, appsettings.School.json, appsettings.Development.json
 
 ## Documentation
 
-- [README.md](README.md) - Project overview (already exists, superseded by this file for development)
+### Core Documentation
+- [README.md](README.md) - Project overview and quick start
+- **CLAUDE.md** (this file) - Comprehensive development guide for Claude Code
 - [DARIUS.md](DARIUS.md) - Line-by-line AuthService code explanation (learning resource)
-- [pythonRAs/USAGE_INTERFACE.md](pythonRAs/USAGE_INTERFACE.md) - Python GUI usage guide
-- [pythonRAs/USAGE_CAMERAS.md](pythonRAs/USAGE_CAMERAS.md) - Camera sensor documentation
+- [GUIDE_TESTS.md](GUIDE_TESTS.md) - Testing scenarios and test data setup
+- [MODIFICATIONS.md](MODIFICATIONS.md) - Code-behind refactoring session notes (2025-11-15)
+- [SESSION_2025-11-19_PHOTOS.md](SESSION_2025-11-19_PHOTOS.md) - Photo BLOB implementation details
+- [Modelisation.png](Modelisation.png) - Database ER diagram
+
+### Python IoT Documentation
+- [pythonRAs/readme.md](pythonRAs/readme.md) - Python scripts overview
+- [pythonRAs/USAGE_INTERFACE.md](pythonRAs/USAGE_INTERFACE.md) - Tkinter GUI usage guide
+- [pythonRAs/USAGE_CAMERAS.md](pythonRAs/USAGE_CAMERAS.md) - Camera sensor setup and usage
 - [pythonRAs/USAGE_MICRO.md](pythonRAs/USAGE_MICRO.md) - Audio sensor documentation
 - [pythonRAs/USAGE_SURVEILLANCE.md](pythonRAs/USAGE_SURVEILLANCE.md) - Intelligent monitoring system
-- [Dcumentation/Demarrage.pdf](Dcumentation/Demarrage.pdf) - User flow mockups
-- [Modelisation.png](Modelisation.png) - Database ER diagram
+- [pythonRAs/guide_capteurs.md](pythonRAs/guide_capteurs.md) - Sensor integration guide
+- [pythonRAs/ANIMATION_BARRE_SON.md](pythonRAs/ANIMATION_BARRE_SON.md) - Audio bar animation implementation
+
+### User Documentation
+- [Dcumentation/Demarrage.pdf](Dcumentation/Demarrage.pdf) - User flow mockups and wireframes
+- [Autorisation_roles.pdf](Autorisation_roles.pdf) - Role-based authorization documentation
+- [sallesense/GUIDE_CONNEXION.md](sallesense/GUIDE_CONNEXION.md) - Connection setup guide
+- [sallesense/README_CONNEXION.md](sallesense/README_CONNEXION.md) - Connection troubleshooting

@@ -13,7 +13,7 @@ try:
     from picamera2 import Picamera2
     CAMERA_AVAILABLE = True
 except ImportError:
-    print("⚠ picamera2 non disponible - mode simulation")
+    print("⚠ picamera2 non disponible")
     CAMERA_AVAILABLE = False
 
 
@@ -59,98 +59,119 @@ class CapturePhotosContinu:
             return False
 
         # 2. Initialiser la caméra
-        if CAMERA_AVAILABLE:
-            try:
-                self.camera = Picamera2()
+        if not CAMERA_AVAILABLE:
+            print("✗ picamera2 n'est pas installé ou importable")
+            print("  Installation: sudo apt install python3-picamera2")
+            return False
 
-                # Configuration pour capture d'images JPEG
-                config = self.camera.create_still_configuration(
-                    main={"size": (1920, 1080)},  # Résolution Full HD
-                    buffer_count=2
-                )
-                self.camera.configure(config)
-                self.camera.start()
+        try:
+            self.camera = Picamera2()
 
-                print("✓ Pi Camera initialisée (1920x1080)")
+            # Configuration pour capture d'images JPEG
+            config = self.camera.create_still_configuration(
+                main={"size": (1920, 1080)},  # Résolution Full HD
+                buffer_count=2
+            )
+            self.camera.configure(config)
+            self.camera.start()
 
-                # Temps de stabilisation de la caméra
-                print("⏳ Stabilisation de la caméra (2 secondes)...")
-                time.sleep(2)
+            print("✓ Pi Camera initialisée (1920x1080)")
 
-            except Exception as e:
-                print(f"✗ Erreur lors de l'initialisation de la caméra: {e}")
-                print("   Vérifiez que la caméra est connectée et activée (raspi-config)")
-                return False
-        else:
-            print("⚠ Mode simulation - Pas de vraie caméra")
+            # Temps de stabilisation de la caméra
+            print("⏳ Stabilisation de la caméra (2 secondes)...")
+            time.sleep(2)
+
+        except Exception as e:
+            print(f"✗ Erreur lors de l'initialisation de la caméra: {e}")
+            print("\n  Diagnostic:")
+            print("  1. Vérifier détection: vcgencmd get_camera")
+            print("  2. Lister caméras: rpicam-hello --list-cameras")
+            print("  3. Vérifier câble nappe sur port CSI")
+            print("  4. Redémarrer après branchement: sudo reboot")
+            return False
 
         print("\n✓ Configuration terminée\n")
         return True
 
     def capturer_photo(self) -> bytes:
         """
-        Capture une photo et la retourne sous forme de bytes (JPEG)
+        Capture une photo directement en mémoire
 
         Returns:
-            Données binaires de la photo (JPEG)
+            Bytes de l'image JPEG (ou None si erreur)
         """
-        if CAMERA_AVAILABLE and self.camera:
-            try:
-                # Capturer l'image en mémoire (format JPEG)
-                buffer = BytesIO()
-                self.camera.capture_file(buffer, format='jpeg')
-                photo_bytes = buffer.getvalue()
-                buffer.close()
+        if not CAMERA_AVAILABLE or not self.camera:
+            print("✗ Caméra non disponible")
+            return None
 
-                return photo_bytes
+        try:
+            # Capturer directement dans un BytesIO (en mémoire)
+            buffer = BytesIO()
+            self.camera.capture_file(buffer, format='jpeg')
+            buffer.seek(0)
+            return buffer.read()
 
-            except Exception as e:
-                print(f"✗ Erreur lors de la capture: {e}")
-                return None
-        else:
-            # Mode simulation - Créer des données factices
-            return b"PHOTO_SIMULEE_" + str(datetime.now()).encode()
+        except Exception as e:
+            print(f"✗ Erreur lors de la capture: {e}")
+            return None
 
-    def envoyer_photo_bd(self, photo_bytes: bytes) -> bool:
+    def envoyer_photo_bd(self, photo_blob: bytes) -> bool:
         """
         Envoie la photo vers la base de données
 
         Args:
-            photo_bytes: Données binaires de la photo
+            photo_blob: Bytes de l'image JPEG
 
         Returns:
             True si succès, False sinon
         """
+        if not photo_blob:
+            print("✗ Photo vide")
+            return False
+
         try:
             date_heure = datetime.now()
 
+            # CRITIQUE: Créer un NOUVEAU cursor à chaque appel
+            cursor = self.db.connection.cursor()
+
             # Insérer la photo dans la BD
-            self.db.execute_non_query(
-                """INSERT INTO Donnees (dateHeure, idCapteur, mesure, photoBlob, noSalle)
-                   VALUES (?, ?, NULL, ?, ?)""",
-                (date_heure, self.id_capteur_camera, photo_bytes, self.id_salle)
-            )
+            query = """
+                INSERT INTO Donnees (dateHeure, idCapteur, mesure, photoBlob, noSalle)
+                VALUES (GETDATE(), ?, NULL, ?, ?)
+            """
+
+            cursor.execute(query, (self.id_capteur_camera, photo_blob, self.id_salle))
+            self.db.connection.commit()
 
             # Récupérer l'ID de la donnée insérée
-            id_donnee = self.db.execute_query("SELECT @@IDENTITY AS id")[0][0]
+            cursor.execute("SELECT @@IDENTITY")
+            id_donnee = cursor.fetchone()[0]
 
             # Créer un événement
-            self.db.execute_non_query(
+            cursor.execute(
                 """INSERT INTO Evenement (type, idDonnee, description)
                    VALUES (?, ?, ?)""",
-                ('CAPTURE', id_donnee, f'Photo capturée à {date_heure.strftime("%H:%M:%S")}')
+                ('CAPTURE', int(id_donnee), f'Photo capturée à {date_heure.strftime("%H:%M:%S")}')
             )
+            self.db.connection.commit()
+
+            # CRITIQUE: Fermer le cursor
+            cursor.close()
 
             self.compteur_photos += 1
-            taille_kb = len(photo_bytes) / 1024
+            taille_kb = len(photo_blob) / 1024
 
             print(f"[{date_heure.strftime('%H:%M:%S')}] Photo #{self.compteur_photos} envoyée "
-                  f"({taille_kb:.1f} KB) - ID: {id_donnee}")
+                  f"({taille_kb:.1f} KB) - ID: {int(id_donnee)}")
 
             return True
 
         except Exception as e:
             print(f"✗ Erreur lors de l'envoi: {e}")
+            import traceback
+            traceback.print_exc()
+            self.db.connection.rollback()
             return False
 
     def capturer_en_continu(self):
@@ -166,12 +187,12 @@ class CapturePhotosContinu:
 
         try:
             while True:
-                # Capturer la photo
-                photo_bytes = self.capturer_photo()
+                # Capturer la photo en mémoire
+                photo_blob = self.capturer_photo()
 
-                if photo_bytes:
-                    # Envoyer vers la BD
-                    self.envoyer_photo_bd(photo_bytes)
+                if photo_blob:
+                    # Envoyer directement vers la BD
+                    self.envoyer_photo_bd(photo_blob)
                 else:
                     print("✗ Échec de la capture")
 
@@ -179,7 +200,7 @@ class CapturePhotosContinu:
                 time.sleep(self.intervalle)
 
         except KeyboardInterrupt:
-            print("\n\n─" * 63)
+            print("\n\n" + "─" * 63)
             print(f"\n✓ Arrêt demandé - {self.compteur_photos} photos capturées")
             print("✓ Programme terminé")
 

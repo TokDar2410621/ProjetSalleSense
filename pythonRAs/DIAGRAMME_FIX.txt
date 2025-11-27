@@ -1,0 +1,214 @@
+╔═══════════════════════════════════════════════════════════════════════╗
+║           DIAGNOSTIC: capture_photos_continu.py                       ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+FLUX AVANT (BUGUÉ):
+═══════════════════
+
+  photo_bytes (bytes)
+        │
+        ▼
+  [envoyer_photo_bd()]
+        │
+        ├─► execute_non_query() ◄── PROBLÈME ICI!
+        │        │                   └─► Wrapper cache les erreurs
+        │        │                   └─► Conversion BLOB peut échouer silencieusement
+        │        │
+        │        ├─► cursor.execute(query, params)
+        │        │        │
+        │        │        └─► ❌ Erreur de conversion pyodbc
+        │        │             └─► Exception capturée par execute_non_query()
+        │        │             └─► Retourne juste False
+        │        │             └─► Pas de traceback!
+        │        │
+        │        └─► return False
+        │
+        └─► print("✗ Erreur")  ◄── Message générique, pas d'info
+
+
+FLUX APRÈS (CORRIGÉ):
+═════════════════════
+
+  photo_bytes (bytes)
+        │
+        ▼
+  [envoyer_photo_bd()]
+        │
+        ├─► cursor = self.db.cursor  ◄── Accès DIRECT
+        │
+        ├─► cursor.execute(query, (id, photo_bytes, salle))
+        │        │
+        │        ├─► ✅ pyodbc gère correctement le BLOB
+        │        └─► Si erreur → Exception remonte
+        │
+        ├─► connection.commit()  ◄── Commit EXPLICITE
+        │        │
+        │        └─► ✅ Transaction confirmée
+        │
+        ├─► cursor.execute("SELECT @@IDENTITY")
+        │        │
+        │        └─► Récupère l'ID de la photo
+        │
+        └─► return True
+
+  except Exception as e:
+        │
+        ├─► print(f"✗ Erreur: {e}")
+        ├─► traceback.print_exc()  ◄── DÉTAILS de l'erreur
+        ├─► connection.rollback()  ◄── ANNULE la transaction
+        └─► return False
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    COMPARAISON DÉTAILLÉE                              ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ASPECT              │ AVANT (Bugué)      │ APRÈS (Corrigé)          │
+├─────────────────────┼────────────────────┼──────────────────────────┤
+│ Méthode principale  │ execute_non_query()│ cursor.execute() direct  │
+│ Visibilité erreurs  │ ❌ Cachées         │ ✅ Complètes            │
+│ Traceback           │ ❌ Non             │ ✅ Oui                  │
+│ Rollback            │ ❌ Non             │ ✅ Oui                  │
+│ Commit              │ Implicite          │ Explicite                │
+│ Conversion BLOB     │ ❌ Problématique   │ ✅ Correcte             │
+│ Nombre paramètres   │ 4 (trop!)          │ 3 (bon)                  │
+│ dateHeure           │ Python param       │ GETDATE() SQL            │
+└─────────────────────┴────────────────────┴──────────────────────────┘
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    POURQUOI LE WRAPPER POSE PROBLÈME                  ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+execute_non_query() dans DatabaseConnection:
+┌────────────────────────────────────────────────────┐
+│ def execute_non_query(query, params):             │
+│     try:                                           │
+│         cursor.execute(query, params)              │
+│         connection.commit()                        │
+│         return True                                │
+│     except pyodbc.Error as e:                      │
+│         print(f"✗ Erreur: {e}")  ◄─── Générique!  │
+│         connection.rollback()                      │
+│         return False  ◄─── Juste False, pas de    │
+│                            détails!                │
+└────────────────────────────────────────────────────┘
+
+                      PROBLÈMES:
+                           │
+         ┌─────────────────┼─────────────────┐
+         ▼                 ▼                 ▼
+   Pas de traceback   Message trop      Difficile de
+                      générique         savoir pourquoi
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    CONVERSION DES TYPES                               ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+Python bytes → SQL Server VARBINARY:
+
+  ❌ AVEC WRAPPER:
+  ┌──────────────────────────────────────────────────┐
+  │ photo_bytes (bytes)                              │
+  │       │                                          │
+  │       └─► execute_non_query(query, params)      │
+  │                │                                 │
+  │                └─► Conversion peut échouer       │
+  │                    silencieusement               │
+  └──────────────────────────────────────────────────┘
+
+  ✅ SANS WRAPPER:
+  ┌──────────────────────────────────────────────────┐
+  │ photo_bytes (bytes)                              │
+  │       │                                          │
+  │       └─► cursor.execute(query, (id, bytes, id))│
+  │                │                                 │
+  │                └─► pyodbc convertit directement  │
+  │                    bytes → VARBINARY(MAX)        │
+  │                    ✅ Fonctionne correctement    │
+  └──────────────────────────────────────────────────┘
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    INSERER_SCREENSHOTS.PY (RÉFÉRENCE)                 ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+Pourquoi ça marche:
+
+  with open(photo_path, 'rb') as file:
+      photo_blob = file.read()  ◄── bytes
+
+  cursor = conn.cursor()
+
+  query = """
+      INSERT INTO Donnees (dateHeure, idCapteur, mesure, photoBlob, noSalle)
+      VALUES (GETDATE(), ?, NULL, ?, ?)
+  """
+
+  cursor.execute(query, (id_capteur, photo_blob, no_salle))
+                         └──────────┬──────────┘
+                                    │
+                      3 paramètres, pas de wrapper!
+
+  conn.commit()  ◄── Commit explicite
+
+
+  ✅ Méthode DIRECTE → Conversion DIRECTE → Succès!
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    RECOMMANDATIONS FINALES                            ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  Pour TOUS les scripts Python qui insèrent des BLOBs:
+
+  ┌────────────────────────────────────────────────────────┐
+  │ ✅ À FAIRE:                                            │
+  │                                                        │
+  │ • Utiliser cursor.execute() DIRECTEMENT               │
+  │ • Utiliser connection.commit() EXPLICITEMENT          │
+  │ • Ajouter traceback.print_exc() dans les exceptions  │
+  │ • Ajouter connection.rollback() en cas d'erreur       │
+  │ • Utiliser GETDATE() pour les timestamps             │
+  │ • Convertir les IDs en int() explicitement            │
+  └────────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────────┐
+  │ ❌ À ÉVITER:                                           │
+  │                                                        │
+  │ • Utiliser des wrappers pour les insertions BLOB     │
+  │ • Passer datetime.now() comme paramètre SQL          │
+  │ • Oublier les tracebacks                             │
+  │ • Oublier les rollbacks                              │
+  └────────────────────────────────────────────────────────┘
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    TEST ET VALIDATION                                 ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  1. Test unitaire:
+     $ cd pythonRAs
+     $ python test_capture_fix.py
+
+  2. Si le test réussit:
+     $ sudo python capture_photos_continu.py
+
+  3. Vérifier dans la BD:
+     SELECT TOP 10
+         idDonnee_PK,
+         dateHeure,
+         DATALENGTH(photoBlob) as TailleBLOB,
+         noSalle
+     FROM Donnees
+     WHERE photoBlob IS NOT NULL
+     ORDER BY idDonnee_PK DESC;
+
+
+═══════════════════════════════════════════════════════════════════════════
+
+Date: 2025-11-27
+Fix appliqué à: capture_photos_continu.py lignes 114-165
+Documentation: FIX_CAPTURE_PHOTOS.md, RESUME_FIX.md
