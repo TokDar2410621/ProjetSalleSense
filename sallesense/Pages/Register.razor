@@ -14,33 +14,34 @@
                     <EditForm Model="@utilisateur" OnValidSubmit="@HandleRegistration">
                         <DataAnnotationsValidator />
 
-                        <div class="mb-3">
+                        <div class="mb-3 form-group-required">
                             <label for="pseudo" class="form-label">Pseudo</label>
-                            <InputText id="pseudo" class="form-control" @bind-Value="utilisateur.Pseudo" placeholder="Pseudo" />
+                            <InputText id="pseudo" class="form-control" @bind-Value="utilisateur.Pseudo" placeholder="Votre pseudo" />
                             <ValidationMessage For="@(() => utilisateur.Pseudo)" />
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-3 form-group-required">
                             <label for="courriel" class="form-label">Courriel</label>
-                            <InputText id="courriel" type="email" class="form-control" @bind-Value="utilisateur.Courriel" placeholder="Courriel" />
+                            <InputText id="courriel" type="email" class="form-control" @bind-Value="utilisateur.Courriel" placeholder="votre@email.com" />
                             <ValidationMessage For="@(() => utilisateur.Courriel)" />
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-3 form-group-required">
                             <label for="motDePasse" class="form-label">Mot de passe</label>
-                            <InputText id="motDePasse" type="password" class="form-control" @bind-Value="utilisateur.MotDePasse" placeholder="Mot de passe" />
+                            <InputText id="motDePasse" type="password" class="form-control" @bind-Value="utilisateur.MotDePasse" placeholder="Votre mot de passe" />
                             <ValidationMessage For="@(() => utilisateur.MotDePasse)" />
+                            <small class="input-hint">Minimum 6 caractères</small>
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-3 form-group-required">
                             <label for="confirmPassword" class="form-label">Confirmer le mot de passe</label>
                             <InputText id="confirmPassword" type="password" class="form-control" @bind-Value="confirmPassword" placeholder="Confirmer le mot de passe" />
                         </div>
 
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="acceptConditions" @bind="acceptConditions" />
+                        <div class="mb-3 form-check form-group-required">
+                            <input type="checkbox" class="form-check-input" id="acceptConditions" @bind="acceptConditions" required />
                             <label class="form-check-label" for="acceptConditions">
-                                J'accepte les conditions
+                                J'accepte les conditions d'utilisation
                             </label>
                         </div>
 

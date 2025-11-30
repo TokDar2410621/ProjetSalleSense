@@ -3,170 +3,300 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using SallseSense.Services
 @using SallseSense.Models
+@using SallseSense.Authentication
 @inject ProfilService ProfilService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
 @attribute [Authorize]
 
-<h3>Mon Profil</h3>
+<PageTitle>Mon Profil - SalleSense</PageTitle>
 
-@if (isLoading)
-{
-    <div class="text-center">
-        <div class="spinner-border" role="status">
-            <span class="sr-only">Chargement...</span>
-        </div>
-    </div>
-}
-else if (utilisateur == null)
-{
-    <div class="alert alert-danger">
-        <strong>Erreur :</strong> Impossible de charger vos informations de profil.
-    </div>
-}
-else
-{
-    @if (!string.IsNullOrEmpty(messageSucces))
+<div class="container-fluid mt-4">
+    @if (isLoading)
     {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            @messageSucces
-            <button type="button" class="close" @onclick="@(() => messageSucces = string.Empty)">
-                <span>&times;</span>
-            </button>
+        <div class="spinner-container">
+            <div class="spinner spinner-lg"></div>
+            <span class="spinner-text">Chargement de votre profil...</span>
         </div>
     }
-
-    @if (!string.IsNullOrEmpty(messageErreur))
+    else if (utilisateur == null)
     {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            @messageErreur
-            <button type="button" class="close" @onclick="@(() => messageErreur = string.Empty)">
-                <span>&times;</span>
-            </button>
+        <div class="alert alert-modern alert-danger" role="alert">
+            <span class="oi oi-warning me-2"></span>
+            <strong>Erreur:</strong> Impossible de charger vos informations de profil.
         </div>
     }
+    else
+    {
+        <!-- Messages de feedback -->
+        @if (!string.IsNullOrEmpty(messageSucces))
+        {
+            <div class="alert alert-modern alert-success alert-dismissible fade show" role="alert">
+                <span class="oi oi-check me-2"></span>
+                @messageSucces
+                <button type="button" class="btn-close" @onclick="@(() => messageSucces = string.Empty)"></button>
+            </div>
+        }
 
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h5>Informations personnelles</h5>
+        @if (!string.IsNullOrEmpty(messageErreur))
+        {
+            <div class="alert alert-modern alert-danger alert-dismissible fade show" role="alert">
+                <span class="oi oi-warning me-2"></span>
+                @messageErreur
+                <button type="button" class="btn-close" @onclick="@(() => messageErreur = string.Empty)"></button>
+            </div>
+        }
+
+        <!-- En-tête du profil avec avatar -->
+        <div class="profile-header mb-4">
+            <div class="profile-header-content">
+                <div class="profile-avatar">
+                    <span class="profile-avatar-text">@GetInitials()</span>
                 </div>
-                <div class="card-body">
-                    @if (!modeEdition)
-                    {
-                        <dl class="row">
-                            <dt class="col-sm-4">Pseudo :</dt>
-                            <dd class="col-sm-8">@utilisateur.Pseudo</dd>
+                <div class="profile-header-info">
+                    <h1 class="profile-name">@utilisateur.Pseudo</h1>
+                    <p class="profile-email">
+                        <span class="oi oi-envelope-closed me-2"></span>
+                        @utilisateur.Courriel
+                    </p>
+                    <div class="profile-badges">
+                        @if (utilisateur.Role == "Admin")
+                        {
+                            <span class="badge badge-admin">
+                                <span class="oi oi-star me-1"></span> Administrateur
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-user">
+                                <span class="oi oi-person me-1"></span> Utilisateur
+                            </span>
+                        }
+                        <span class="badge badge-active">
+                            <span class="oi oi-check me-1"></span> Compte actif
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                            <dt class="col-sm-4">Email :</dt>
-                            <dd class="col-sm-8">@utilisateur.Courriel</dd>
-
-                            <dt class="col-sm-4">Rôle :</dt>
-                            <dd class="col-sm-8">
-                                <span class="badge badge-@(utilisateur.Role == "Administrateur" ? "danger" : "primary")">
-                                    @utilisateur.Role
-                                </span>
-                            </dd>
-                        </dl>
-                        <button class="btn btn-primary" @onclick="ActiverModeEdition">
-                            Modifier mes informations
-                        </button>
-                    }
-                    else
-                    {
-                        <EditForm Model="@utilisateurEdit" OnValidSubmit="@SauvegarderModifications">
-                            <DataAnnotationsValidator />
-                            <ValidationSummary />
-
-                            <div class="form-group">
-                                <label for="pseudo">Pseudo :</label>
-                                <InputText id="pseudo" class="form-control" @bind-Value="utilisateurEdit.Pseudo" />
+        <div class="row g-4">
+            <!-- Informations personnelles -->
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="oi oi-person me-2"></span>
+                            Informations personnelles
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (!modeEdition)
+                        {
+                            <div class="profile-info-list">
+                                <div class="profile-info-item">
+                                    <div class="profile-info-icon">
+                                        <span class="oi oi-person"></span>
+                                    </div>
+                                    <div class="profile-info-content">
+                                        <span class="profile-info-label">Pseudo</span>
+                                        <span class="profile-info-value">@utilisateur.Pseudo</span>
+                                    </div>
+                                </div>
+                                <div class="profile-info-item">
+                                    <div class="profile-info-icon">
+                                        <span class="oi oi-envelope-closed"></span>
+                                    </div>
+                                    <div class="profile-info-content">
+                                        <span class="profile-info-label">Adresse email</span>
+                                        <span class="profile-info-value">@utilisateur.Courriel</span>
+                                    </div>
+                                </div>
+                                <div class="profile-info-item">
+                                    <div class="profile-info-icon">
+                                        <span class="oi oi-badge"></span>
+                                    </div>
+                                    <div class="profile-info-content">
+                                        <span class="profile-info-label">Rôle</span>
+                                        <span class="profile-info-value">
+                                            @if (utilisateur.Role == "Admin")
+                                            {
+                                                <span class="badge badge-admin">
+                                                    <span class="oi oi-star me-1"></span> Administrateur
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-user">
+                                                    <span class="oi oi-person me-1"></span> Utilisateur
+                                                </span>
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-
-                            <div class="form-group">
-                                <label for="courriel">Email :</label>
-                                <InputText id="courriel" class="form-control" @bind-Value="utilisateurEdit.Courriel" type="email" />
+                            <div class="mt-4">
+                                <button class="btn btn-primary" @onclick="ActiverModeEdition">
+                                    <span class="oi oi-pencil me-2"></span>
+                                    Modifier mes informations
+                                </button>
                             </div>
+                        }
+                        else
+                        {
+                            <EditForm Model="@utilisateurEdit" OnValidSubmit="@SauvegarderModifications">
+                                <DataAnnotationsValidator />
+                                <ValidationSummary class="alert alert-danger" />
 
-                            <div class="form-group">
-                                <label>Rôle :</label>
-                                <p class="form-control-plaintext">
-                                    <span class="badge badge-@(utilisateur.Role == "Administrateur" ? "danger" : "primary")">
-                                        @utilisateur.Role
-                                    </span>
-                                    <small class="text-muted ml-2">(Non modifiable)</small>
+                                <div class="mb-3">
+                                    <label for="pseudo" class="form-label">
+                                        <span class="oi oi-person me-1"></span> Pseudo <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <span class="oi oi-person"></span>
+                                        </span>
+                                        <InputText id="pseudo" class="form-control" @bind-Value="utilisateurEdit.Pseudo" placeholder="Votre pseudo" />
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="courriel" class="form-label">
+                                        <span class="oi oi-envelope-closed me-1"></span> Email <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <span class="oi oi-envelope-closed"></span>
+                                        </span>
+                                        <InputText id="courriel" class="form-control" @bind-Value="utilisateurEdit.Courriel" type="email" placeholder="votre@email.com" />
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label class="form-label">
+                                        <span class="oi oi-badge me-1"></span> Rôle
+                                    </label>
+                                    <div class="form-control-plaintext">
+                                        @if (utilisateur.Role == "Admin")
+                                        {
+                                            <span class="badge badge-admin">
+                                                <span class="oi oi-star me-1"></span> Administrateur
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-user">
+                                                <span class="oi oi-person me-1"></span> Utilisateur
+                                            </span>
+                                        }
+                                        <small class="text-muted ms-2">(Non modifiable)</small>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-success @(isSubmitting ? "btn-loading" : "")" disabled="@isSubmitting">
+                                        <span class="oi oi-check me-1"></span>
+                                        Sauvegarder
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="AnnulerEdition" disabled="@isSubmitting">
+                                        <span class="oi oi-x me-1"></span>
+                                        Annuler
+                                    </button>
+                                </div>
+                            </EditForm>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sécurité - Mot de passe -->
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="oi oi-lock-locked me-2"></span>
+                            Sécurité
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (!modeChangementMotDePasse)
+                        {
+                            <div class="security-info">
+                                <div class="security-icon">
+                                    <span class="oi oi-shield"></span>
+                                </div>
+                                <h6 class="security-title">Protection du compte</h6>
+                                <p class="security-text">
+                                    Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe régulièrement.
                                 </p>
+                                <ul class="security-tips">
+                                    <li><span class="oi oi-check me-2 text-success"></span>Utilisez au moins 8 caractères</li>
+                                    <li><span class="oi oi-check me-2 text-success"></span>Incluez des chiffres et symboles</li>
+                                    <li><span class="oi oi-check me-2 text-success"></span>Évitez les mots courants</li>
+                                </ul>
+                                <button class="btn btn-warning" @onclick="@(() => modeChangementMotDePasse = true)">
+                                    <span class="oi oi-key me-2"></span>
+                                    Changer mon mot de passe
+                                </button>
                             </div>
+                        }
+                        else
+                        {
+                            <EditForm Model="@motDePasseModel" OnValidSubmit="@ChangerMotDePasse">
+                                <div class="mb-3">
+                                    <label for="ancienMdp" class="form-label">
+                                        <span class="oi oi-lock-locked me-1"></span> Ancien mot de passe <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <span class="oi oi-lock-locked"></span>
+                                        </span>
+                                        <InputText id="ancienMdp" class="form-control" @bind-Value="motDePasseModel.AncienMotDePasse" type="password" placeholder="Votre mot de passe actuel" />
+                                    </div>
+                                </div>
 
-                            <div class="btn-group">
-                                <button type="submit" class="btn btn-success" disabled="@isSubmitting">
-                                    @if (isSubmitting)
-                                    {
-                                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                                    }
-                                    Sauvegarder
-                                </button>
-                                <button type="button" class="btn btn-secondary" @onclick="AnnulerEdition" disabled="@isSubmitting">
-                                    Annuler
-                                </button>
-                            </div>
-                        </EditForm>
-                    }
+                                <div class="mb-3">
+                                    <label for="nouveauMdp" class="form-label">
+                                        <span class="oi oi-key me-1"></span> Nouveau mot de passe <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <span class="oi oi-key"></span>
+                                        </span>
+                                        <InputText id="nouveauMdp" class="form-control" @bind-Value="motDePasseModel.NouveauMotDePasse" type="password" placeholder="Nouveau mot de passe" />
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label for="confirmMdp" class="form-label">
+                                        <span class="oi oi-check me-1"></span> Confirmer le mot de passe <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <span class="oi oi-check"></span>
+                                        </span>
+                                        <InputText id="confirmMdp" class="form-control" @bind-Value="motDePasseModel.ConfirmationMotDePasse" type="password" placeholder="Confirmez le nouveau mot de passe" />
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-warning @(isSubmittingPassword ? "btn-loading" : "")" disabled="@isSubmittingPassword">
+                                        <span class="oi oi-check me-1"></span>
+                                        Valider le changement
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="AnnulerChangementMotDePasse" disabled="@isSubmittingPassword">
+                                        <span class="oi oi-x me-1"></span>
+                                        Annuler
+                                    </button>
+                                </div>
+                            </EditForm>
+                        }
+                    </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5>Changer le mot de passe</h5>
-                </div>
-                <div class="card-body">
-                    @if (!modeChangementMotDePasse)
-                    {
-                        <p class="text-muted">Pour des raisons de sécurité, vous pouvez changer votre mot de passe à tout moment.</p>
-                        <button class="btn btn-warning" @onclick="@(() => modeChangementMotDePasse = true)">
-                            Changer mon mot de passe
-                        </button>
-                    }
-                    else
-                    {
-                        <EditForm Model="@motDePasseModel" OnValidSubmit="@ChangerMotDePasse">
-                            <div class="form-group">
-                                <label for="ancienMdp">Ancien mot de passe :</label>
-                                <InputText id="ancienMdp" class="form-control" @bind-Value="motDePasseModel.AncienMotDePasse" type="password" />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="nouveauMdp">Nouveau mot de passe :</label>
-                                <InputText id="nouveauMdp" class="form-control" @bind-Value="motDePasseModel.NouveauMotDePasse" type="password" />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="confirmMdp">Confirmer le mot de passe :</label>
-                                <InputText id="confirmMdp" class="form-control" @bind-Value="motDePasseModel.ConfirmationMotDePasse" type="password" />
-                            </div>
-
-                            <div class="btn-group">
-                                <button type="submit" class="btn btn-warning" disabled="@isSubmittingPassword">
-                                    @if (isSubmittingPassword)
-                                    {
-                                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                                    }
-                                    Valider
-                                </button>
-                                <button type="button" class="btn btn-secondary" @onclick="AnnulerChangementMotDePasse" disabled="@isSubmittingPassword">
-                                    Annuler
-                                </button>
-                            </div>
-                        </EditForm>
-                    }
-                </div>
-            </div>
-        </div>
-    </div>
-}
+    }
+</div>
 
 @code {
     private Utilisateur? utilisateur;
@@ -187,6 +317,20 @@ else
     protected override async Task OnInitializedAsync()
     {
         await ChargerUtilisateur();
+    }
+
+    private string GetInitials()
+    {
+        if (utilisateur == null || string.IsNullOrEmpty(utilisateur.Pseudo))
+            return "?";
+
+        var parts = utilisateur.Pseudo.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+
+        return utilisateur.Pseudo.Length >= 2
+            ? utilisateur.Pseudo.Substring(0, 2).ToUpper()
+            : utilisateur.Pseudo.ToUpper();
     }
 
     private async Task ChargerUtilisateur()
@@ -252,6 +396,16 @@ else
                 await ChargerUtilisateur();
                 modeEdition = false;
                 messageSucces = result.Message;
+
+                // Mettre à jour la session avec le nouveau pseudo
+                var customAuth = (CustomAuthenticationStateProvider)AuthStateProvider;
+                var newSession = new UserSession
+                {
+                    UserId = userId,
+                    UserName = utilisateurEdit.Pseudo,
+                    Role = utilisateur.Role ?? "User"
+                };
+                await customAuth.UpdateAuthenticationState(newSession);
             }
             else
             {

@@ -135,6 +135,47 @@ namespace SallseSense.Services
         }
 
         /// <summary>
+        /// Change le rôle d'un utilisateur (User <-> Admin)
+        /// </summary>
+        public async Task<OperationResult> ToggleAdminRoleAsync(int userId, int currentAdminId)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+
+            // Vérifier qu'on ne modifie pas son propre rôle
+            if (userId == currentAdminId)
+            {
+                return new OperationResult
+                {
+                    Success = false,
+                    Message = "Vous ne pouvez pas modifier votre propre rôle."
+                };
+            }
+
+            var user = await db.Utilisateurs.FindAsync(userId);
+            if (user == null)
+            {
+                return new OperationResult
+                {
+                    Success = false,
+                    Message = "Utilisateur introuvable."
+                };
+            }
+
+            // Toggle le rôle
+            var oldRole = user.Role;
+            user.Role = user.Role == "Admin" ? "User" : "Admin";
+
+            await db.SaveChangesAsync();
+
+            var action = user.Role == "Admin" ? "promu administrateur" : "rétrogradé utilisateur";
+            return new OperationResult
+            {
+                Success = true,
+                Message = $"{user.Pseudo} a été {action} avec succès."
+            };
+        }
+
+        /// <summary>
         /// ViewModel pour la page admin
         /// </summary>
         public class AdminViewModel

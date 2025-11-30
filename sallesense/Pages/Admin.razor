@@ -86,47 +86,74 @@ else
                                     <td>
                                         @if (user.Role == "Admin")
                                         {
-                                            <span class="badge bg-primary">👑 Admin</span>
+                                            <span class="badge badge-admin">
+                                                <span class="oi oi-star me-1"></span> Admin
+                                            </span>
                                         }
                                         else
                                         {
-                                            <span class="badge bg-secondary">👤 User</span>
+                                            <span class="badge badge-user">
+                                                <span class="oi oi-person me-1"></span> User
+                                            </span>
                                         }
                                     </td>
                                     <td>
                                         @if (isBlacklisted)
                                         {
-                                            <span class="badge bg-danger">🚫 Blacklisté</span>
+                                            <span class="badge badge-blacklisted">
+                                                <span class="oi oi-ban me-1"></span> Blacklisté
+                                            </span>
                                         }
                                         else
                                         {
-                                            <span class="badge bg-success">✓ Actif</span>
+                                            <span class="badge badge-active">
+                                                <span class="oi oi-check me-1"></span> Actif
+                                            </span>
                                         }
                                     </td>
                                     <td>
-                                        @if (user.IdUtilisateurPk != currentUserId && user.Role != "Admin")
-                                        {
-                                            @if (isBlacklisted)
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            @if (user.IdUtilisateurPk != currentUserId)
                                             {
-                                                <button class="btn btn-sm btn-success" @onclick="() => RemoveFromBlacklist(user.IdUtilisateurPk)">
-                                                    ✓ Débloquer
-                                                </button>
+                                                @* Bouton toggle Admin *@
+                                                @if (!isBlacklisted)
+                                                {
+                                                    @if (user.Role == "Admin")
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => ToggleAdminRole(user.IdUtilisateurPk)" title="Retirer les droits admin">
+                                                            <span class="oi oi-arrow-circle-bottom"></span> Rétrograder
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-success" @onclick="() => ToggleAdminRole(user.IdUtilisateurPk)" title="Promouvoir administrateur">
+                                                            <span class="oi oi-star"></span> Promouvoir
+                                                        </button>
+                                                    }
+                                                }
+
+                                                @* Bouton Blacklist *@
+                                                @if (user.Role != "Admin")
+                                                {
+                                                    @if (isBlacklisted)
+                                                    {
+                                                        <button class="btn btn-sm btn-success" @onclick="() => RemoveFromBlacklist(user.IdUtilisateurPk)">
+                                                            <span class="oi oi-check"></span> Débloquer
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-sm btn-danger" @onclick="() => AddToBlacklist(user.IdUtilisateurPk)">
+                                                            <span class="oi oi-ban"></span> Blacklister
+                                                        </button>
+                                                    }
+                                                }
                                             }
                                             else
                                             {
-                                                <button class="btn btn-sm btn-danger" @onclick="() => AddToBlacklist(user.IdUtilisateurPk)">
-                                                    🚫 Blacklister
-                                                </button>
+                                                <span class="text-muted small">C'est vous</span>
                                             }
-                                        }
-                                        else if (user.IdUtilisateurPk == currentUserId)
-                                        {
-                                            <span class="text-muted small">Impossible de se blacklister soi-même</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted small">Admin protégé</span>
-                                        }
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -138,38 +165,44 @@ else
     </div>
 
     <div class="mt-4">
-        <h5>📊 Statistiques</h5>
-        <div class="row">
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h3 class="text-primary">@utilisateurs.Count</h3>
-                        <p class="mb-0">Utilisateurs total</p>
+        <h5 class="mb-3 d-flex align-items-center gap-2">
+            <span class="oi oi-graph text-primary"></span> Statistiques
+        </h5>
+        <div class="row g-3">
+            <div class="col-md-3 col-sm-6">
+                <div class="admin-stat-card primary">
+                    <div class="admin-stat-icon primary">
+                        <span class="oi oi-people"></span>
                     </div>
+                    <div class="admin-stat-value">@utilisateurs.Count</div>
+                    <div class="admin-stat-label">Utilisateurs total</div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h3 class="text-success">@utilisateurs.Count(u => u.Role == "Admin")</h3>
-                        <p class="mb-0">Administrateurs</p>
+            <div class="col-md-3 col-sm-6">
+                <div class="admin-stat-card success">
+                    <div class="admin-stat-icon success">
+                        <span class="oi oi-shield"></span>
                     </div>
+                    <div class="admin-stat-value">@utilisateurs.Count(u => u.Role == "Admin")</div>
+                    <div class="admin-stat-label">Administrateurs</div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h3 class="text-info">@utilisateurs.Count(u => u.Role == "User")</h3>
-                        <p class="mb-0">Utilisateurs normaux</p>
+            <div class="col-md-3 col-sm-6">
+                <div class="admin-stat-card info">
+                    <div class="admin-stat-icon info">
+                        <span class="oi oi-person"></span>
                     </div>
+                    <div class="admin-stat-value">@utilisateurs.Count(u => u.Role == "User")</div>
+                    <div class="admin-stat-label">Utilisateurs normaux</div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h3 class="text-danger">@blacklistedUserIds.Count</h3>
-                        <p class="mb-0">Blacklistés</p>
+            <div class="col-md-3 col-sm-6">
+                <div class="admin-stat-card danger">
+                    <div class="admin-stat-icon danger">
+                        <span class="oi oi-ban"></span>
                     </div>
+                    <div class="admin-stat-value">@blacklistedUserIds.Count</div>
+                    <div class="admin-stat-label">Blacklistés</div>
                 </div>
             </div>
         </div>
@@ -252,6 +285,24 @@ else
         successMessage = null;
 
         var result = await AdminService.RemoveFromBlacklistAsync(userId);
+
+        if (result.Success)
+        {
+            successMessage = result.Message;
+            await LoadDataAsync();
+        }
+        else
+        {
+            errorMessage = result.Message;
+        }
+    }
+
+    private async Task ToggleAdminRole(int userId)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        var result = await AdminService.ToggleAdminRoleAsync(userId, currentUserId);
 
         if (result.Success)
         {

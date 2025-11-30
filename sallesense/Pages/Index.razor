@@ -195,7 +195,7 @@
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         padding: 4rem 2rem;
-        margin: -2rem -1.5rem 3rem -2rem;
+        margin: -2rem -2rem 3rem -2rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -258,61 +258,101 @@
 
     .hero-illustration {
         position: relative;
-        width: 450px;
-        height: 450px;
+        width: 100%;
         z-index: 1;
-        display: none; /* Caché par défaut */
-        flex-shrink: 0;
+        display: flex;
+        justify-content: center;
+        gap: 0.75rem;
+        margin-top: 2rem;
+        flex-wrap: wrap;
     }
 
     @@media (min-width: 1400px) {
         .hero-illustration {
-            display: block; /* Visible seulement sur très grand écran */
+            width: 450px;
+            height: 450px;
+            display: block;
+            margin-top: 0;
+            flex-shrink: 0;
         }
     }
 
     .floating-card {
-        position: absolute;
+        position: relative;
         background: white;
         color: var(--gray-900);
-        padding: 1.25rem 1.5rem;
-        border-radius: 1rem;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.25rem;
         font-weight: 600;
-        min-width: 140px;
-        white-space: nowrap;
+        font-size: 0.75rem;
+        animation: float 3s ease-in-out infinite;
     }
 
     .floating-card .oi {
-        font-size: 2rem;
+        font-size: 1.25rem;
         color: var(--primary);
     }
 
     .card-1 {
-        top: 20px;
-        left: 20px;
-        animation: float 3s ease-in-out infinite;
+        animation-delay: 0s;
     }
 
     .card-2 {
-        top: 180px;
-        right: 20px;
-        animation: float 3s ease-in-out infinite 1s;
+        animation-delay: 1s;
+    }
+
+    .card-2 .oi {
+        color: var(--success);
     }
 
     .card-3 {
-        bottom: 60px;
-        left: 60px;
-        animation: float 3s ease-in-out infinite 2s;
+        animation-delay: 2s;
+    }
+
+    .card-3 .oi {
+        color: var(--warning);
+    }
+
+    @@media (min-width: 1400px) {
+        .floating-card {
+            position: absolute;
+            padding: 1.25rem 1.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            gap: 0.5rem;
+            font-size: 1rem;
+            min-width: 140px;
+            white-space: nowrap;
+        }
+
+        .floating-card .oi {
+            font-size: 2rem;
+        }
+
+        .card-1 {
+            top: 20px;
+            left: 20px;
+        }
+
+        .card-2 {
+            top: 180px;
+            right: 20px;
+        }
+
+        .card-3 {
+            bottom: 60px;
+            left: 60px;
+        }
     }
 
     @@keyframes float {
         0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-20px); }
+        50% { transform: translateY(-10px); }
     }
 
     /* Features Section */
@@ -440,7 +480,7 @@
     .cta-section {
         background: linear-gradient(135deg, #1e40af, #3b82f6);
         padding: 5rem 2rem;
-        margin: 3rem -2rem -2rem -2rem;
+        margin: 3rem -2rem -1rem -2rem;
         text-align: center;
         color: white;
     }
@@ -483,7 +523,9 @@
         }
 
         .hero-illustration {
-            display: none;
+            display: flex;
+            width: 100%;
+            margin-top: 2rem;
         }
 
         .hero-title {
@@ -497,21 +539,101 @@
 
     @@media (max-width: 767px) {
         .hero-section {
-            padding: 3rem 1rem;
-            margin: -1rem -1rem 2rem -1rem;
+            min-height: auto;
+            padding: 2rem 1rem;
+            margin: -1rem -0.75rem 2rem -0.75rem;
         }
 
         .hero-title {
-            font-size: 2rem;
+            font-size: 1.75rem;
+        }
+
+        .hero-subtitle {
+            font-size: 0.9375rem;
+        }
+
+        .hero-illustration {
+            margin-top: 2.5rem;
+            gap: 0.5rem;
+        }
+
+        .floating-card {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.625rem;
+            border-radius: 0.5rem;
+        }
+
+        .floating-card .oi {
+            font-size: 1rem;
+        }
+
+        .stats-section {
+            padding: 2rem 0;
         }
 
         .stat-box {
             flex-direction: column;
             text-align: center;
+            padding: 1.25rem;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            font-size: 1.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .section-title {
-            font-size: 2rem;
+            font-size: 1.5rem;
+        }
+
+        .section-subtitle {
+            font-size: 0.875rem;
+        }
+
+        .feature-card {
+            padding: 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1rem;
+        }
+
+        .feature-card p {
+            font-size: 0.8125rem;
+        }
+
+        .cta-section {
+            padding: 3rem 1rem;
+        }
+
+        .cta-content h2 {
+            font-size: 1.5rem;
+        }
+
+        .cta-content p {
+            font-size: 0.9375rem;
         }
     }
 </style>

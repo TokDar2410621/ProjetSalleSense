@@ -38,6 +38,7 @@ public class Startup
         services.AddScoped<ProfilService>();
         services.AddScoped<AdminService>();
         services.AddScoped<ModifierReservationService>();
+        services.AddScoped<SalleStatistiquesService>();
 
         // Services d'authentification
         services.AddScoped<ProtectedSessionStorage>();

@@ -31,10 +31,10 @@
 
                         <!-- Sélection de la salle -->
                         <div class="mb-4">
-                            <h5 class="mb-3">Salle</h5>
-                            <div class="mb-3">
-                                <label for="salle" class="form-label">Sélectionner une salle *</label>
-                                <select id="salle" class="form-select" @onchange="@(async (e) => { reservation.NoSalle = int.Parse(e.Value!.ToString()!); await OnSalleChangedAsync(); })">
+                            <h5 class="mb-3 font-semibold">Salle</h5>
+                            <div class="mb-3 form-group-required">
+                                <label for="salle" class="form-label">Sélectionner une salle</label>
+                                <select id="salle" class="form-select" required @onchange="@(async (e) => { reservation.NoSalle = int.Parse(e.Value!.ToString()!); await OnSalleChangedAsync(); })">
                                     <option value="0">-- Choisir une salle --</option>
                                     @foreach (var salle in sallesDisponibles)
                                     {
@@ -57,28 +57,28 @@
 
                         <!-- Détails de la réservation -->
                         <div class="mb-4">
-                            <h5 class="mb-3">Détails de la réservation</h5>
+                            <h5 class="mb-3 font-semibold">Détails de la réservation</h5>
 
                             <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="date" class="form-label">Date *</label>
-                                    <input type="date" id="date" class="form-control" @bind="dateReservation" />
+                                <div class="col-md-6 form-group-required">
+                                    <label for="date" class="form-label">Date</label>
+                                    <input type="date" id="date" class="form-control @GetDateValidationClass()" @bind="dateReservation" required />
                                 </div>
-                                <div class="col-md-6">
-                                    <label for="nombrePersonnes" class="form-label">Nombre de personnes *</label>
-                                    <input type="number" id="nombrePersonnes" class="form-control" @bind="reservation.NombrePersonne" @bind:event="onchange" min="1" />
+                                <div class="col-md-6 form-group-required">
+                                    <label for="nombrePersonnes" class="form-label">Nombre de personnes</label>
+                                    <input type="number" id="nombrePersonnes" class="form-control @GetNombrePersonnesValidationClass()" @bind="reservation.NombrePersonne" @bind:event="onchange" min="1" required />
                                     <ValidationMessage For="@(() => reservation.NombrePersonne)" />
                                 </div>
                             </div>
 
                             <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="heureDebut" class="form-label">Heure début *</label>
-                                    <input type="time" id="heureDebut" class="form-control" @bind="heureDebut" />
+                                <div class="col-md-6 form-group-required">
+                                    <label for="heureDebut" class="form-label">Heure début</label>
+                                    <input type="time" id="heureDebut" class="form-control @GetHeureDebutValidationClass()" @bind="heureDebut" required />
                                 </div>
-                                <div class="col-md-6">
-                                    <label for="heureFin" class="form-label">Heure fin *</label>
-                                    <input type="time" id="heureFin" class="form-control" @bind="heureFin" />
+                                <div class="col-md-6 form-group-required">
+                                    <label for="heureFin" class="form-label">Heure fin</label>
+                                    <input type="time" id="heureFin" class="form-control @GetHeureFinValidationClass()" @bind="heureFin" required />
                                 </div>
                             </div>
                         </div>
@@ -277,6 +277,33 @@
                heureFin.HasValue &&
                reservation.NombrePersonne > 0 &&
                !salleNonDisponible;
+    }
+
+    private string GetDateValidationClass()
+    {
+        if (!dateReservation.HasValue) return "";
+        return dateReservation.Value >= DateTime.Today ? "is-valid" : "is-invalid";
+    }
+
+    private string GetNombrePersonnesValidationClass()
+    {
+        if (reservation.NombrePersonne <= 0) return "";
+        if (depassementCapacite) return "is-invalid";
+        return "is-valid";
+    }
+
+    private string GetHeureDebutValidationClass()
+    {
+        if (!heureDebut.HasValue) return "";
+        if (!heureFin.HasValue) return "is-valid";
+        return heureDebut.Value < heureFin.Value ? "is-valid" : "is-invalid";
+    }
+
+    private string GetHeureFinValidationClass()
+    {
+        if (!heureFin.HasValue) return "";
+        if (!heureDebut.HasValue) return "is-valid";
+        return heureFin.Value > heureDebut.Value ? "is-valid" : "is-invalid";
     }
 
     private async Task HandleSubmit()

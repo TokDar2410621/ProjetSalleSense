@@ -1,5 +1,19 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
+<!-- Mobile Header -->
+<div class="mobile-header">
+    <a class="mobile-brand" href="">SalleSense</a>
+    <button class="mobile-menu-btn" @onclick="ToggleMenu" aria-label="Menu">
+        <span class="oi @(menuOpen ? "oi-x" : "oi-menu")"></span>
+    </button>
+</div>
+
+<!-- Mobile Dropdown Menu -->
+<div class="mobile-dropdown @(menuOpen ? "show" : "")" @onclick="CloseMenu">
+    <NavMenu />
+</div>
+
+<!-- Desktop Sidebar -->
 <div class="sidebar">
     <NavMenu />
 </div>
@@ -9,3 +23,17 @@
         @Body
     </div>
 </div>
+
+@code {
+    private bool menuOpen = false;
+
+    private void ToggleMenu()
+    {
+        menuOpen = !menuOpen;
+    }
+
+    private void CloseMenu()
+    {
+        menuOpen = false;
+    }
+}

@@ -22,15 +22,15 @@
                     <EditForm Model="@loginModel" OnValidSubmit="@HandleLoginAsync">
                         <DataAnnotationsValidator />
 
-                        <div class="mb-3">
+                        <div class="mb-3 form-group-required">
                             <label for="courriel" class="form-label">Courriel</label>
-                            <InputText id="courriel" type="email" class="form-control" @bind-Value="loginModel.Courriel" placeholder="Courriel" />
+                            <InputText id="courriel" type="email" class="form-control" @bind-Value="loginModel.Courriel" placeholder="votre@email.com" />
                             <ValidationMessage For="@(() => loginModel.Courriel)" />
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-3 form-group-required">
                             <label for="motDePasse" class="form-label">Mot de passe</label>
-                            <InputText id="motDePasse" type="password" class="form-control" @bind-Value="loginModel.MotDePasse" placeholder="Mot de passe" />
+                            <InputText id="motDePasse" type="password" class="form-control" @bind-Value="loginModel.MotDePasse" placeholder="Votre mot de passe" />
                             <ValidationMessage For="@(() => loginModel.MotDePasse)" />
                         </div>
 

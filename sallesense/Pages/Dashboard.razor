@@ -9,36 +9,46 @@
 <div class="container-fluid mt-4">
     <div class="row mb-4">
         <div class="col">
-            <h2>Surveillez et réservez vos salles en temps réel</h2>
-            <p class="text-muted">Consultez les salles disponibles et gérez vos réservations en temps et en heure de début et de fin.</p>
+            <h1 class="page-title">Tableau de bord</h1>
+            <p class="page-subtitle">Surveillez et réservez vos salles en temps réel</p>
         </div>
     </div>
 
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <div class="spinner spinner-lg"></div>
+            <span class="spinner-text">Chargement des données...</span>
+        </div>
+    }
+    else
+    {
+
     <!-- Filtres de recherche -->
     <div class="row mb-4">
-        <div class="col-md-12">
+        <div class="col-12">
             <div class="card">
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label">Voir les salles</label>
+                <div class="card-body py-3">
+                    <div class="filter-grid">
+                        <div class="filter-item">
+                            <label class="filter-label">Voir les salles</label>
                             <select class="form-select" @bind="filtreType">
                                 <option value="all">Toutes</option>
                                 <option value="disponible">Disponibles</option>
                                 <option value="reservee">Réservées</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Recherche</label>
-                            <input type="text" class="form-select" @bind="rechercheTexte" placeholder="Rechercher..." />
+                        <div class="filter-item">
+                            <label class="filter-label">Recherche</label>
+                            <input type="text" class="form-control" @bind="rechercheTexte" placeholder="Rechercher..." />
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Capacité min</label>
-                            <input type="number" class="form-select" @bind="capaciteMin" placeholder="0" />
+                        <div class="filter-item filter-item-small">
+                            <label class="filter-label">Capacité min</label>
+                            <input type="number" class="form-control" @bind="capaciteMin" placeholder="0" min="0" />
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Date</label>
-                            <input type="date" class="form-select" @bind="dateFiltre" />
+                        <div class="filter-item">
+                            <label class="filter-label">Date</label>
+                            <input type="date" class="form-control" @bind="dateFiltre" />
                         </div>
                     </div>
                 </div>
@@ -48,39 +58,42 @@
 
     <!-- Section Statistiques -->
     <div class="row mb-4">
-        <div class="col-md-12">
+        <div class="col-md-12 mb-3">
             <div class="d-flex justify-content-between align-items-center">
-                <h4>Statistiques</h4>
-                <div>
-                    <small class="text-muted me-3">Dernière mise à jour: @derniereMiseAJour.ToString("HH:mm:ss")</small>
-                    <button class="btn btn-sm btn-outline-primary" @onclick="RafraichirDonnees" disabled="@isRefreshing">
-                        <span class="oi oi-reload"></span> @(isRefreshing ? "Rafraîchissement..." : "Rafraîchir")
+                <h4 class="font-semibold text-xl mb-0">Statistiques</h4>
+                <div class="d-flex align-items-center gap-3">
+                    <small class="text-muted">Dernière mise à jour: @derniereMiseAJour.ToString("HH:mm:ss")</small>
+                    <button class="btn btn-sm btn-outline-primary @(isRefreshing ? "btn-loading" : "")" @onclick="RafraichirDonnees" disabled="@isRefreshing" aria-label="Rafraîchir les données" aria-busy="@isRefreshing">
+                        <span class="oi oi-reload" aria-hidden="true"></span> Rafraîchir
                     </button>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card bg-primary text-white">
-                <div class="card-body">
-                    <h5 class="card-title">Salles actives (20)</h5>
-                    <p class="card-text display-6">@nombreSallesActives</p>
+        <div class="col-md-4 mb-3">
+            <div class="stat-card primary">
+                <div class="stat-icon primary">
+                    <span class="oi oi-home" aria-hidden="true"></span>
                 </div>
+                <div class="stat-value primary">@nombreSallesActives</div>
+                <div class="stat-label">Salles actives</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card bg-success text-white">
-                <div class="card-body">
-                    <h5 class="card-title">Réservations en cours</h5>
-                    <p class="card-text display-6">@nombreReservations</p>
+        <div class="col-md-4 mb-3">
+            <div class="stat-card success">
+                <div class="stat-icon success">
+                    <span class="oi oi-calendar" aria-hidden="true"></span>
                 </div>
+                <div class="stat-value success">@nombreReservations</div>
+                <div class="stat-label">Réservations en cours</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card bg-info text-white">
-                <div class="card-body">
-                    <h5 class="card-title">Disponibles maintenant</h5>
-                    <p class="card-text display-6">@nombreSallesDisponibles</p>
+        <div class="col-md-4 mb-3">
+            <div class="stat-card info">
+                <div class="stat-icon info">
+                    <span class="oi oi-check" aria-hidden="true"></span>
                 </div>
+                <div class="stat-value info">@nombreSallesDisponibles</div>
+                <div class="stat-label">Disponibles maintenant</div>
             </div>
         </div>
     </div>
@@ -104,7 +117,7 @@
                                             <small class="text-muted">@activite.DateHeure.ToString("dd/MM/yyyy HH:mm")</small>
                                         </div>
                                         <div class="d-flex align-items-center gap-2">
-                                            <span class="badge bg-secondary">@activite.Status</span>
+                                            <span class="badge @GetBadgeClass(activite.Status)">@activite.Status</span>
                                             @if (activite.Status != "Terminée")
                                             {
                                                 <a href="/reservation/modifier/@activite.IdReservation" class="btn btn-sm btn-outline-primary">
@@ -119,7 +132,13 @@
                     }
                     else
                     {
-                        <p class="text-muted">Aucune activité récente</p>
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <span class="oi oi-inbox"></span>
+                            </div>
+                            <div class="empty-state-title">Aucune activité récente</div>
+                            <p class="empty-state-text">Les réservations apparaîtront ici.</p>
+                        </div>
                     }
                 </div>
             </div>
@@ -150,15 +169,15 @@
             {
                 <div class="col-md-4">
                     <div class="card h-100 @(salle.EstDisponible ? "" : "border-warning")">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 text-white">Salle @salle.Numero</h5>
+                            <span class="badge @(salle.EstDisponible ? "bg-success" : "bg-warning text-dark")">
+                                @(salle.EstDisponible ? "Libre" : "Occupée")
+                            </span>
+                        </div>
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h5 class="card-title">Salle @salle.Numero</h5>
-                                <span class="badge @(salle.EstDisponible ? "bg-success" : "bg-warning text-dark")">
-                                    @(salle.EstDisponible ? "Libre" : "Occupée")
-                                </span>
-                            </div>
                             <p class="card-text">
-                                <strong>Capacité:</strong> @salle.CapaciteMaximale personnes<br />
+                                <strong>Capacité maximale:</strong> @salle.CapaciteMaximale personnes<br />
                                 <strong>Local:</strong> @salle.Numero
                             </p>
                             <div class="d-grid gap-2">
@@ -211,6 +230,7 @@
             </div>
         </div>
     }
+    } @* End of else (isLoading) *@
 </div>
 
 @code {
@@ -230,15 +250,18 @@
 
     private DateTime derniereMiseAJour = DateTime.Now;
     private bool isRefreshing = false;
+    private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadDataFromDatabase();
+        isLoading = false;
     }
 
     private async Task RafraichirDonnees()
     {
         isRefreshing = true;
+        StateHasChanged();
         await LoadDataFromDatabase();
         isRefreshing = false;
     }
@@ -253,5 +276,18 @@
         nombreSallesDisponibles = data.NombreSallesDisponibles;
         dernieresActivites = data.DernieresActivites;
         derniereMiseAJour = data.DerniereMiseAJour;
+    }
+
+    private string GetBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Terminée" => "bg-dark text-white",
+            "En cours" => "bg-warning text-dark",
+            "À venir" => "bg-info text-dark",
+            "Confirmée" => "bg-success",
+            "Annulée" => "bg-danger",
+            _ => "bg-primary"
+        };
     }
 }

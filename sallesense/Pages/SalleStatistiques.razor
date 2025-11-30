@@ -1,0 +1,679 @@
+@page "/salle/{Id:int}/statistiques"
+@using Microsoft.AspNetCore.Authorization
+@using SallseSense.Services
+@inject SalleStatistiquesService StatistiquesService
+@inject NavigationManager NavigationManager
+@attribute [Authorize]
+
+<PageTitle>Statistiques - Salle @Id - SalleSense</PageTitle>
+
+<div class="container-fluid mt-4">
+    @if (isLoading)
+    {
+        <div class="spinner-container">
+            <div class="spinner spinner-lg"></div>
+            <span class="spinner-text">Chargement des statistiques...</span>
+        </div>
+    }
+    else if (stats == null)
+    {
+        <div class="alert alert-modern alert-danger" role="alert">
+            <span class="oi oi-warning me-2"></span>
+            <strong>Erreur:</strong> Impossible de charger les statistiques de cette salle.
+            <a href="/salle/@Id" class="btn btn-outline-danger btn-sm ms-3">Retour à la salle</a>
+        </div>
+    }
+    else
+    {
+        <!-- En-tête -->
+        <div class="row mb-4">
+            <div class="col">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/dashboard">Accueil</a></li>
+                        <li class="breadcrumb-item"><a href="/salles">Salles</a></li>
+                        <li class="breadcrumb-item"><a href="/salle/@Id">Salle @stats.NumeroSalle</a></li>
+                        <li class="breadcrumb-item active">Statistiques</li>
+                    </ol>
+                </nav>
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h1 class="page-title">
+                            <span class="oi oi-graph me-2"></span>
+                            Statistiques - Salle @stats.NumeroSalle
+                        </h1>
+                        <p class="page-subtitle">Analyse des réservations et de l'utilisation</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-primary" @onclick="RefreshStats" disabled="@isRefreshing">
+                            <span class="oi oi-reload @(isRefreshing ? "spin" : "")"></span> Actualiser
+                        </button>
+                        <a href="/salle/@Id" class="btn btn-outline-secondary">
+                            <span class="oi oi-arrow-left me-1"></span> Retour
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cartes statistiques principales -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="stat-card primary">
+                    <div class="stat-icon primary">
+                        <span class="oi oi-calendar"></span>
+                    </div>
+                    <div class="stat-value primary">@stats.TotalReservations</div>
+                    <div class="stat-label">Total réservations</div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="stat-card success">
+                    <div class="stat-icon success">
+                        <span class="oi oi-clock"></span>
+                    </div>
+                    <div class="stat-value success">@stats.DureeMoyenneFormatee</div>
+                    <div class="stat-label">Durée moyenne</div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="stat-card info">
+                    <div class="stat-icon info">
+                        <span class="oi oi-people"></span>
+                    </div>
+                    <div class="stat-value info">@stats.PersonnesMoyenne</div>
+                    <div class="stat-label">Pers. en moyenne</div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="stat-card warning">
+                    <div class="stat-icon warning">
+                        <span class="oi oi-pie-chart"></span>
+                    </div>
+                    <div class="stat-value warning">@stats.TauxOccupation%</div>
+                    <div class="stat-label">Taux d'occupation</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistiques secondaires -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="stats-mini-icon primary mb-2">
+                            <span class="oi oi-calendar"></span>
+                        </div>
+                        <div class="stats-mini-value">@stats.ReservationsCeMois</div>
+                        <div class="stats-mini-label">Ce mois-ci</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="stats-mini-icon success mb-2">
+                            <span class="oi oi-calendar"></span>
+                        </div>
+                        <div class="stats-mini-value">@stats.ReservationsCetteSemaine</div>
+                        <div class="stats-mini-label">Cette semaine</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="stats-mini-icon info mb-2">
+                            <span class="oi oi-media-record"></span>
+                        </div>
+                        <div class="stats-mini-value">@stats.ReservationsEnCours</div>
+                        <div class="stats-mini-label">En cours</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <!-- Graphique par jour de la semaine -->
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="oi oi-bar-chart me-2"></span>
+                            Réservations par jour
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            @foreach (var jour in stats.ReservationsParJour)
+                            {
+                                var percentage = stats.MaxReservationsParJour > 0
+                                    ? (jour.NombreReservations * 100.0 / stats.MaxReservationsParJour)
+                                    : 0;
+                                <div class="chart-bar-row">
+                                    <span class="chart-bar-label">@jour.Jour</span>
+                                    <div class="chart-bar-wrapper">
+                                        <div class="chart-bar chart-bar-primary" style="width: @percentage%"></div>
+                                    </div>
+                                    <span class="chart-bar-value">@jour.NombreReservations</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graphique par heure -->
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="oi oi-clock me-2"></span>
+                            Réservations par heure
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-hours-container">
+                            @foreach (var heure in stats.ReservationsParHeure)
+                            {
+                                var percentage = stats.MaxReservationsParHeure > 0
+                                    ? (heure.NombreReservations * 100.0 / stats.MaxReservationsParHeure)
+                                    : 0;
+                                <div class="chart-hour-bar">
+                                    <div class="chart-hour-fill" style="height: @percentage%"></div>
+                                    <span class="chart-hour-value">@heure.NombreReservations</span>
+                                    <span class="chart-hour-label">@heure.HeureFormatee</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Évolution sur 30 jours -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="oi oi-graph me-2"></span>
+                            Évolution sur 30 jours
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-line-container">
+                            @foreach (var jour in stats.Evolution30Jours)
+                            {
+                                var percentage = stats.MaxEvolution > 0
+                                    ? (jour.NombreReservations * 100.0 / stats.MaxEvolution)
+                                    : 0;
+                                <div class="chart-line-bar" title="@jour.DateFormatee: @jour.NombreReservations réservation(s)">
+                                    <div class="chart-line-fill" style="height: @percentage%"></div>
+                                </div>
+                            }
+                        </div>
+                        <div class="chart-line-legend">
+                            <span>@stats.Evolution30Jours.FirstOrDefault()?.DateFormatee</span>
+                            <span>Aujourd'hui</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <!-- Données des capteurs -->
+            <div class="col-lg-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="oi oi-dashboard me-2"></span>
+                            Données capteurs (7 jours)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="sensor-stats">
+                            <div class="sensor-stat-item">
+                                <div class="sensor-stat-icon">
+                                    <span class="oi oi-camera-slr"></span>
+                                </div>
+                                <div class="sensor-stat-info">
+                                    <div class="sensor-stat-value">@stats.NombrePhotos7Jours</div>
+                                    <div class="sensor-stat-label">Photos capturées</div>
+                                </div>
+                            </div>
+                            <div class="sensor-stat-item">
+                                <div class="sensor-stat-icon">
+                                    <span class="oi oi-pulse"></span>
+                                </div>
+                                <div class="sensor-stat-info">
+                                    <div class="sensor-stat-value">@stats.NombreMesures7Jours</div>
+                                    <div class="sensor-stat-label">Mesures relevées</div>
+                                </div>
+                            </div>
+                            <div class="sensor-stat-item">
+                                <div class="sensor-stat-icon">
+                                    <span class="oi oi-bell"></span>
+                                </div>
+                                <div class="sensor-stat-info">
+                                    <div class="sensor-stat-value">@stats.NombreEvenements7Jours</div>
+                                    <div class="sensor-stat-label">Événements détectés</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dernières réservations -->
+            <div class="col-lg-8">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="oi oi-list me-2"></span>
+                            Dernières réservations
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (stats.DernieresReservations.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Horaire</th>
+                                            <th>Personnes</th>
+                                            <th>Statut</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var res in stats.DernieresReservations)
+                                        {
+                                            <tr>
+                                                <td>@res.HeureDebut.ToString("dd/MM/yyyy")</td>
+                                                <td>@res.HeureDebut.ToString("HH:mm") - @res.HeureFin.ToString("HH:mm")</td>
+                                                <td>@res.NombrePersonnes</td>
+                                                <td>
+                                                    @if (res.EstEnCours)
+                                                    {
+                                                        <span class="badge bg-warning text-dark">En cours</span>
+                                                    }
+                                                    else if (res.EstPassee)
+                                                    {
+                                                        <span class="badge bg-secondary text-white">Terminée</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-info">À venir</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-state py-4">
+                                <div class="empty-state-icon" style="font-size: 2rem;">
+                                    <span class="oi oi-calendar"></span>
+                                </div>
+                                <div class="empty-state-title">Aucune réservation</div>
+                                <p class="empty-state-text">Cette salle n'a pas encore de réservations.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graphique des niveaux sonores -->
+        @if (stats.MesuresSonores.Any())
+        {
+            <div class="row g-4 mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header card-header-compact d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h6 class="mb-0">
+                                <span class="oi oi-volume-high me-2"></span>
+                                Niveaux sonores (7 derniers jours)
+                            </h6>
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <span class="sound-badge sound-badge-min">Min: @stats.NiveauSonoreMin dB</span>
+                                <span class="sound-badge sound-badge-avg">Moy: @stats.NiveauSonoreMoyen dB</span>
+                                <span class="sound-badge sound-badge-max">Max: @stats.NiveauSonoreMax dB</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Graphique en courbes SVG -->
+                            <div class="sound-curve-chart">
+                                <!-- Zones de niveau -->
+                                <div class="sound-zones">
+                                    <div class="sound-zone sound-zone-danger" style="height: 15%;" title=">85 dB - Très fort"></div>
+                                    <div class="sound-zone sound-zone-high" style="height: 10%;" title="75-85 dB - Fort"></div>
+                                    <div class="sound-zone sound-zone-moderate" style="height: 15%;" title="60-75 dB - Modéré"></div>
+                                    <div class="sound-zone sound-zone-normal" style="height: 20%;" title="40-60 dB - Normal"></div>
+                                    <div class="sound-zone sound-zone-low" style="height: 40%;" title="<40 dB - Silencieux"></div>
+                                </div>
+
+                                <!-- SVG Chart -->
+                                <svg class="sound-svg" viewBox="-10 -15 1020 330" preserveAspectRatio="none">
+                                    <defs>
+                                        <linearGradient id="soundGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.8" />
+                                            <stop offset="50%" style="stop-color:#3b82f6;stop-opacity:0.3" />
+                                            <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0.05" />
+                                        </linearGradient>
+                                        <filter id="glow">
+                                            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                                            <feMerge>
+                                                <feMergeNode in="coloredBlur"/>
+                                                <feMergeNode in="SourceGraphic"/>
+                                            </feMerge>
+                                        </filter>
+                                    </defs>
+
+                                    <!-- Grille horizontale (y = 280 - db*2.6) -->
+                                    <!-- 85 dB: y = 280 - 221 = 59 -->
+                                    <line x1="0" y1="59" x2="1000" y2="59" class="sound-grid-line" />
+                                    <!-- 75 dB: y = 280 - 195 = 85 -->
+                                    <line x1="0" y1="85" x2="1000" y2="85" class="sound-grid-line" />
+                                    <!-- 60 dB: y = 280 - 156 = 124 -->
+                                    <line x1="0" y1="124" x2="1000" y2="124" class="sound-grid-line" />
+                                    <!-- 40 dB: y = 280 - 104 = 176 -->
+                                    <line x1="0" y1="176" x2="1000" y2="176" class="sound-grid-line" />
+
+                                    <!-- Area fill -->
+                                    <path d="@GetSoundAreaPath()" class="sound-area" fill="url(#soundGradient)" />
+
+                                    <!-- Ligne de courbe -->
+                                    <path d="@GetSoundCurvePath()" class="sound-line" filter="url(#glow)" />
+
+                                    <!-- Points de données avec valeurs -->
+                                    @{ var pointIndex = 0; }
+                                    @foreach (var mesure in stats.MesuresSonores)
+                                    {
+                                        var x = GetPointX(pointIndex, stats.MesuresSonores.Count);
+                                        var y = GetPointY(mesure.NiveauDb);
+                                        var labelY = y - 12;
+                                        <circle cx="@x" cy="@y" r="6" class="sound-point @mesure.CouleurClasse">
+                                            <title>@mesure.DateHeure.ToString("dd/MM HH:mm") - @mesure.NiveauDb dB (@mesure.Categorie)</title>
+                                        </circle>
+                                        @((MarkupString)$"<text x=\"{x.ToString(System.Globalization.CultureInfo.InvariantCulture)}\" y=\"{labelY.ToString(System.Globalization.CultureInfo.InvariantCulture)}\" class=\"sound-point-label\" text-anchor=\"middle\">{Math.Round(mesure.NiveauDb, 0)}</text>")
+                                        pointIndex++;
+                                    }
+                                </svg>
+
+                                <!-- Axe Y labels -->
+                                <div class="sound-y-axis">
+                                    <span>100</span>
+                                    <span>85</span>
+                                    <span>75</span>
+                                    <span>60</span>
+                                    <span>40</span>
+                                    <span>0</span>
+                                </div>
+                            </div>
+
+                            <!-- Légende -->
+                            <div class="sound-legend-modern">
+                                <div class="sound-legend-item-modern">
+                                    <span class="sound-dot sound-level-low"></span>
+                                    <span>&lt;40 dB</span>
+                                </div>
+                                <div class="sound-legend-item-modern">
+                                    <span class="sound-dot sound-level-normal"></span>
+                                    <span>40-60 dB</span>
+                                </div>
+                                <div class="sound-legend-item-modern">
+                                    <span class="sound-dot sound-level-moderate"></span>
+                                    <span>60-75 dB</span>
+                                </div>
+                                <div class="sound-legend-item-modern">
+                                    <span class="sound-dot sound-level-high"></span>
+                                    <span>75-85 dB</span>
+                                </div>
+                                <div class="sound-legend-item-modern">
+                                    <span class="sound-dot sound-level-very-high"></span>
+                                    <span>&gt;85 dB</span>
+                                </div>
+                            </div>
+
+                            <!-- Timeline -->
+                            <div class="sound-timeline">
+                                @if (stats.MesuresSonores.Count > 0)
+                                {
+                                    <span>@stats.MesuresSonores.First().DateHeure.ToString("dd/MM HH:mm")</span>
+                                    <span>@stats.MesuresSonores.Last().DateHeure.ToString("dd/MM HH:mm")</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Événements de la salle -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <span class="oi oi-bell me-2"></span>
+                            Événements récents
+                        </h5>
+                        @if (stats.Evenements.Any())
+                        {
+                            <span class="badge bg-primary">@stats.Evenements.Count événement(s)</span>
+                        }
+                    </div>
+                    <div class="card-body p-0">
+                        @if (stats.Evenements.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Date & Heure</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var evt in stats.Evenements)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <span class="text-muted">
+                                                        <span class="oi oi-calendar me-1"></span>
+                                                        @evt.DateHeure.ToString("dd/MM/yyyy")
+                                                    </span>
+                                                    <span class="ms-2">
+                                                        <span class="oi oi-clock me-1"></span>
+                                                        @evt.DateHeure.ToString("HH:mm:ss")
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge @GetEventTypeBadgeClass(evt.Type)">
+                                                        <span class="@GetEventTypeIcon(evt.Type) me-1"></span>
+                                                        @evt.Type
+                                                    </span>
+                                                </td>
+                                                <td>@evt.Description</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-state py-4">
+                                <div class="empty-state-icon" style="font-size: 2rem;">
+                                    <span class="oi oi-bell"></span>
+                                </div>
+                                <div class="empty-state-title">Aucun événement</div>
+                                <p class="empty-state-text">Aucun événement n'a été détecté dans cette salle.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informations sur la salle -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                            <div>
+                                <h6 class="mb-1">Informations de la salle</h6>
+                                <p class="mb-0 text-muted">
+                                    <span class="oi oi-home me-1"></span> Salle @stats.NumeroSalle |
+                                    <span class="oi oi-people me-1"></span> Capacité: @stats.CapaciteMaximale personnes
+                                </p>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a href="/reservation/creer?salleId=@Id" class="btn btn-primary">
+                                    <span class="oi oi-plus me-1"></span> Réserver
+                                </a>
+                                <a href="/salle/@Id" class="btn btn-outline-primary">
+                                    <span class="oi oi-eye me-1"></span> Voir détails
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private SalleStatistiquesService.SalleStatistiquesViewModel stats;
+    private bool isLoading = true;
+    private bool isRefreshing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStats();
+    }
+
+    private async Task LoadStats()
+    {
+        isLoading = true;
+        stats = await StatistiquesService.GetStatistiquesAsync(Id);
+        isLoading = false;
+    }
+
+    private async Task RefreshStats()
+    {
+        isRefreshing = true;
+        StateHasChanged();
+        await LoadStats();
+        isRefreshing = false;
+    }
+
+    private string GetEventTypeBadgeClass(string type)
+    {
+        return type?.ToUpper() switch
+        {
+            "MOUVEMENT_DETECTE" => "bg-warning text-dark",
+            "ENTREE" => "bg-success",
+            "SORTIE" => "bg-info",
+            "BRUIT_FORT" => "bg-danger",
+            "BRUIT_FAIBLE" => "bg-secondary",
+            "CAPTURE" => "bg-primary",
+            "TEMPERATURE_HAUTE" => "bg-danger",
+            "TEMPERATURE_BASSE" => "bg-info",
+            "ALERTE_CO2" => "bg-danger",
+            "HUMIDITE_ANORMALE" => "bg-warning text-dark",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetEventTypeIcon(string type)
+    {
+        return type?.ToUpper() switch
+        {
+            "MOUVEMENT_DETECTE" => "oi oi-target",
+            "ENTREE" => "oi oi-account-login",
+            "SORTIE" => "oi oi-account-logout",
+            "BRUIT_FORT" => "oi oi-volume-high",
+            "BRUIT_FAIBLE" => "oi oi-volume-low",
+            "CAPTURE" => "oi oi-camera-slr",
+            "TEMPERATURE_HAUTE" => "oi oi-fire",
+            "TEMPERATURE_BASSE" => "oi oi-sun",
+            "ALERTE_CO2" => "oi oi-warning",
+            "HUMIDITE_ANORMALE" => "oi oi-droplet",
+            _ => "oi oi-bell"
+        };
+    }
+
+    // Méthodes pour le graphique SVG des niveaux sonores
+    private double GetPointX(int index, int total)
+    {
+        if (total <= 1) return 500;
+        return (index * 1000.0) / (total - 1);
+    }
+
+    private double GetPointY(double db)
+    {
+        // 0 dB = 280 (bas), 100 dB = 20 (haut) - avec marge pour les points
+        return 280 - (db * 2.6);
+    }
+
+    private string GetSoundCurvePath()
+    {
+        if (stats?.MesuresSonores == null || !stats.MesuresSonores.Any())
+            return "";
+
+        var points = stats.MesuresSonores.Select((m, i) => new
+        {
+            X = GetPointX(i, stats.MesuresSonores.Count),
+            Y = GetPointY(m.NiveauDb)
+        }).ToList();
+
+        if (points.Count == 1)
+            return $"M {points[0].X.ToString(System.Globalization.CultureInfo.InvariantCulture)} {points[0].Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+
+        // Créer une courbe lisse avec des courbes de Bézier
+        var path = new System.Text.StringBuilder();
+        path.Append($"M {points[0].X.ToString(System.Globalization.CultureInfo.InvariantCulture)} {points[0].Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+
+        for (int i = 1; i < points.Count; i++)
+        {
+            var prev = points[i - 1];
+            var curr = points[i];
+            var tension = 0.3;
+
+            var cp1x = prev.X + (curr.X - prev.X) * tension;
+            var cp1y = prev.Y;
+            var cp2x = curr.X - (curr.X - prev.X) * tension;
+            var cp2y = curr.Y;
+
+            path.Append($" C {cp1x.ToString(System.Globalization.CultureInfo.InvariantCulture)} {cp1y.ToString(System.Globalization.CultureInfo.InvariantCulture)}, {cp2x.ToString(System.Globalization.CultureInfo.InvariantCulture)} {cp2y.ToString(System.Globalization.CultureInfo.InvariantCulture)}, {curr.X.ToString(System.Globalization.CultureInfo.InvariantCulture)} {curr.Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+
+        return path.ToString();
+    }
+
+    private string GetSoundAreaPath()
+    {
+        var curvePath = GetSoundCurvePath();
+        if (string.IsNullOrEmpty(curvePath)) return "";
+
+        var lastX = stats.MesuresSonores.Count > 1
+            ? GetPointX(stats.MesuresSonores.Count - 1, stats.MesuresSonores.Count)
+            : 500;
+
+        return $"{curvePath} L {lastX.ToString(System.Globalization.CultureInfo.InvariantCulture)} 280 L 0 280 Z";
+    }
+}

@@ -11,101 +11,163 @@
 <PageTitle>Photos - SalleSense</PageTitle>
 
 <div class="container-fluid mt-4">
+    <!-- En-tête moderne -->
     <div class="row mb-4">
         <div class="col">
-            <h1 class="display-4">
-                <span class="oi oi-camera-slr" aria-hidden="true"></span>
-                Galerie de Photos
-            </h1>
-            <p class="text-muted">Photos capturées par les caméras dans les salles</p>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h1 class="page-title">
+                        <span class="oi oi-camera-slr me-2" aria-hidden="true"></span>
+                        Galerie de Photos
+                    </h1>
+                    <p class="page-subtitle">Photos capturées par les caméras dans les salles</p>
+                </div>
+                @if (!isLoading && photos != null && photos.Any())
+                {
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="photos-counter">
+                            <span class="oi oi-image"></span>
+                            <span class="photos-counter-value">@filteredPhotos.Count</span>
+                            <span class="photos-counter-label">photo(s)</span>
+                        </div>
+                        <button class="btn btn-outline-primary @(isRefreshing ? "btn-loading" : "")"
+                                @onclick="RefreshPhotos"
+                                disabled="@isRefreshing">
+                            <span class="oi oi-reload" aria-hidden="true"></span> Actualiser
+                        </button>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 
     @if (isLoading)
     {
-        <div class="text-center my-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Chargement...</span>
-            </div>
-            <p class="mt-3">Chargement des photos...</p>
+        <div class="spinner-container">
+            <div class="spinner spinner-lg"></div>
+            <span class="spinner-text">Chargement des photos...</span>
         </div>
     }
     else if (errorMessage != null)
     {
-        <div class="alert alert-danger" role="alert">
+        <div class="alert alert-modern alert-danger" role="alert">
+            <span class="oi oi-warning me-2"></span>
             <strong>Erreur:</strong> @errorMessage
         </div>
     }
     else if (photos == null || !photos.Any())
     {
-        <div class="alert alert-info" role="alert">
-            <strong>Aucune photo disponible</strong>
-            <p class="mb-0 mt-2">Aucune photo n'a encore été capturée par les caméras.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <span class="oi oi-camera-slr"></span>
+            </div>
+            <div class="empty-state-title">Aucune photo disponible</div>
+            <p class="empty-state-text">Aucune photo n'a encore été capturée par les caméras.</p>
         </div>
     }
     else
     {
-        <!-- Filtres -->
+        <!-- Filtres inline modernes -->
         <div class="row mb-4">
-            <div class="col-md-4">
+            <div class="col-12">
                 <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Filtres</h5>
-                        <div class="mb-3">
-                            <label class="form-label">Filtrer par salle:</label>
-                            <select class="form-select" @onchange="OnSalleFilterChanged">
-                                <option value="0">Toutes les salles</option>
-                                @foreach (var salle in salles)
-                                {
-                                    <option value="@salle">Salle @salle</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span><strong>Total:</strong> @filteredPhotos.Count photo(s)</span>
-                            <button class="btn btn-sm btn-outline-primary" @onclick="RefreshPhotos">
-                                <span class="oi oi-reload" aria-hidden="true"></span> Actualiser
-                            </button>
+                    <div class="card-body py-3">
+                        <div class="filter-grid">
+                            <div class="filter-item">
+                                <label class="filter-label">
+                                    <span class="oi oi-list me-1"></span> Filtrer par salle
+                                </label>
+                                <select class="form-select" @onchange="OnSalleFilterChanged">
+                                    <option value="0">Toutes les salles</option>
+                                    @foreach (var salle in salles)
+                                    {
+                                        <option value="@salle">Salle @salle</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="filter-item">
+                                <label class="filter-label">
+                                    <span class="oi oi-sort-ascending me-1"></span> Trier par
+                                </label>
+                                <select class="form-select" @bind="sortOrder" @bind:after="ApplyFilter">
+                                    <option value="newest">Plus récentes</option>
+                                    <option value="oldest">Plus anciennes</option>
+                                    <option value="largest">Plus grandes</option>
+                                    <option value="smallest">Plus petites</option>
+                                </select>
+                            </div>
+                            <div class="filter-item filter-item-small">
+                                <label class="filter-label">Vue</label>
+                                <div class="btn-group w-100" role="group" aria-label="Vue">
+                                    <button type="button"
+                                            class="btn btn-sm @(viewMode == "grid" ? "btn-primary" : "btn-outline-primary")"
+                                            @onclick="SetGridView">
+                                        <span class="oi oi-grid-three-up"></span>
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm @(viewMode == "large" ? "btn-primary" : "btn-outline-primary")"
+                                            @onclick="SetLargeView">
+                                        <span class="oi oi-grid-two-up"></span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Galerie de photos -->
-        <div class="row">
+        <!-- Galerie de photos moderne -->
+        <div class="row g-4 gallery-container">
             @foreach (var photo in filteredPhotos)
             {
-                <div class="col-md-4 col-lg-3 mb-4">
-                    <div class="card h-100 shadow-sm">
-                        <!-- Image miniature cliquable -->
-                        <div class="photo-container" style="cursor: pointer;" @onclick="() => SelectPhoto(photo)">
+                <div class="@(viewMode == "grid" ? "col-sm-6 col-md-4 col-lg-3" : "col-sm-6 col-lg-4")">
+                    <div class="gallery-card" @onclick="() => SelectPhoto(photo)">
+                        <div class="gallery-image-wrapper">
                             <img src="/api/photo/@photo.IdDonnee"
-                                 class="card-img-top"
+                                 class="gallery-image"
                                  alt="Photo du @photo.DateHeure.ToString("dd/MM/yyyy HH:mm")"
-                                 style="height: 200px; object-fit: cover;">
-                        </div>
-
-                        <div class="card-body">
-                            <h6 class="card-title">Photo #@photo.IdDonnee</h6>
-                            <p class="card-text small mb-1">
-                                <strong>Date:</strong> @photo.DateHeure.ToString("dd/MM/yyyy")<br />
-                                <strong>Heure:</strong> @photo.DateHeure.ToString("HH:mm:ss")<br />
-                                <strong>Salle:</strong> @photo.NoSalle<br />
-                                <strong>Taille:</strong> @photo.TailleFormatee
-                            </p>
-                        </div>
-
-                        @if (isAdmin)
-                        {
-                            <div class="card-footer bg-transparent">
-                                <a href="/api/photo/@photo.IdDonnee"
-                                   download="photo_@(photo.IdDonnee)_@(photo.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
-                                   class="btn btn-sm btn-outline-primary w-100">
-                                    <span class="oi oi-data-transfer-download" aria-hidden="true"></span> Télécharger
-                                </a>
+                                 loading="lazy"
+                                 decoding="async">
+                            <div class="gallery-overlay">
+                                <div class="gallery-overlay-content">
+                                    <span class="oi oi-fullscreen-enter gallery-zoom-icon"></span>
+                                    <span class="gallery-view-text">Voir en grand</span>
+                                </div>
                             </div>
-                        }
+                            <div class="gallery-time-badge">
+                                <span class="oi oi-clock"></span>
+                                @photo.DateHeure.ToString("HH:mm")
+                            </div>
+                        </div>
+                        <div class="gallery-info">
+                            <div class="gallery-info-header">
+                                <div class="gallery-salle-badge">
+                                    <span class="oi oi-home"></span>
+                                    <span>Salle @photo.NoSalle</span>
+                                </div>
+                            </div>
+                            <div class="gallery-info-row">
+                                <span class="gallery-date">
+                                    <span class="oi oi-calendar me-1"></span>
+                                    @photo.DateHeure.ToString("dd MMM yyyy")
+                                </span>
+                                <span class="gallery-size">
+                                    <span class="oi oi-file me-1"></span> @photo.TailleFormatee
+                                </span>
+                            </div>
+                            @if (isAdmin)
+                            {
+                                <div class="gallery-actions">
+                                    <a href="/api/photo/@photo.IdDonnee"
+                                       download="photo_@(photo.IdDonnee)_@(photo.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
+                                       class="btn btn-sm btn-primary gallery-download-btn"
+                                       @onclick:stopPropagation="true">
+                                        <span class="oi oi-data-transfer-download me-1"></span> Télécharger
+                                    </a>
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
             }
@@ -113,38 +175,74 @@
     }
 </div>
 
-<!-- Modal pour afficher la photo en grand -->
+<!-- Modal moderne pour afficher la photo en grand -->
 @if (selectedPhoto != null)
 {
-    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="CloseModal">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content" @onclick:stopPropagation="true">
-                <div class="modal-header">
-                    <h5 class="modal-title">Photo #@selectedPhoto.IdDonnee - @selectedPhoto.DateHeure.ToString("dd/MM/yyyy HH:mm:ss")</h5>
-                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <img src="/api/photo/@selectedPhoto.IdDonnee"
-                         class="img-fluid"
-                         alt="Photo du @selectedPhoto.DateHeure"
-                         style="max-height: 70vh;">
-                </div>
-                <div class="modal-footer">
-                    <div class="me-auto">
-                        <strong>Salle:</strong> @selectedPhoto.NoSalle |
-                        <strong>Taille:</strong> @selectedPhoto.TailleFormatee
+    <div class="gallery-modal-backdrop" @onclick="CloseModal">
+        <div class="gallery-modal" @onclick:stopPropagation="true">
+            <button type="button" class="gallery-modal-close" @onclick="CloseModal" aria-label="Fermer">
+                <span class="oi oi-x"></span>
+            </button>
+
+            <div class="gallery-modal-image-container">
+                <img src="/api/photo/@selectedPhoto.IdDonnee"
+                     class="gallery-modal-image"
+                     alt="Photo du @selectedPhoto.DateHeure">
+            </div>
+
+            <div class="gallery-modal-info">
+                <div class="gallery-modal-details">
+                    <h5 class="gallery-modal-title">
+                        <span class="oi oi-camera-slr me-2"></span>
+                        Photo #@selectedPhoto.IdDonnee
+                    </h5>
+                    <div class="gallery-modal-meta">
+                        <span class="gallery-modal-meta-item">
+                            <span class="oi oi-calendar me-1"></span>
+                            @selectedPhoto.DateHeure.ToString("dd MMMM yyyy")
+                        </span>
+                        <span class="gallery-modal-meta-item">
+                            <span class="oi oi-clock me-1"></span>
+                            @selectedPhoto.DateHeure.ToString("HH:mm:ss")
+                        </span>
+                        <span class="gallery-modal-meta-item">
+                            <span class="oi oi-home me-1"></span>
+                            Salle @selectedPhoto.NoSalle
+                        </span>
+                        <span class="gallery-modal-meta-item">
+                            <span class="oi oi-file me-1"></span>
+                            @selectedPhoto.TailleFormatee
+                        </span>
                     </div>
+                </div>
+                <div class="gallery-modal-actions">
                     @if (isAdmin)
                     {
                         <a href="/api/photo/@selectedPhoto.IdDonnee"
                            download="photo_@(selectedPhoto.IdDonnee)_@(selectedPhoto.DateHeure.ToString("yyyyMMdd_HHmmss")).jpg"
                            class="btn btn-primary">
-                            <span class="oi oi-data-transfer-download" aria-hidden="true"></span> Télécharger
+                            <span class="oi oi-data-transfer-download me-1"></span> Télécharger
                         </a>
                     }
-                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Fermer</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CloseModal">
+                        <span class="oi oi-x me-1"></span> Fermer
+                    </button>
                 </div>
             </div>
+
+            <!-- Navigation entre photos -->
+            @if (filteredPhotos.Count > 1)
+            {
+                <button class="gallery-nav gallery-nav-prev" @onclick="PreviousPhoto" @onclick:stopPropagation="true" aria-label="Photo précédente">
+                    <span class="oi oi-chevron-left"></span>
+                </button>
+                <button class="gallery-nav gallery-nav-next" @onclick="NextPhoto" @onclick:stopPropagation="true" aria-label="Photo suivante">
+                    <span class="oi oi-chevron-right"></span>
+                </button>
+                <div class="gallery-counter">
+                    @(filteredPhotos.IndexOf(selectedPhoto) + 1) / @filteredPhotos.Count
+                </div>
+            }
         </div>
     </div>
 }
@@ -153,11 +251,14 @@
     private List<PhotoInfo> photos = new();
     private List<PhotoInfo> filteredPhotos = new();
     private List<int> salles = new();
-    private PhotoInfo selectedPhoto = null;
+    private PhotoInfo? selectedPhoto = null;
     private bool isLoading = true;
+    private bool isRefreshing = false;
     private bool isAdmin = false;
-    private string errorMessage = null;
+    private string? errorMessage = null;
     private int selectedSalleFilter = 0;
+    private string sortOrder = "newest";
+    private string viewMode = "grid";
 
     protected override async Task OnInitializedAsync()
     {
@@ -185,10 +286,11 @@
             errorMessage = null;
 
             photos = await PhotoService.GetAllPhotosAsync();
-            filteredPhotos = photos;
 
             // Extraire la liste unique des salles
             salles = photos.Select(p => p.NoSalle).Distinct().OrderBy(s => s).ToList();
+
+            ApplyFilter();
 
             Logger.LogInformation($"Chargement de {photos.Count} photos réussi");
         }
@@ -205,8 +307,10 @@
 
     private async Task RefreshPhotos()
     {
+        isRefreshing = true;
+        StateHasChanged();
         await LoadPhotos();
-        ApplyFilter();
+        isRefreshing = false;
     }
 
     private void OnSalleFilterChanged(ChangeEventArgs e)
@@ -220,15 +324,24 @@
 
     private void ApplyFilter()
     {
-        if (selectedSalleFilter == 0)
+        // Filtrer par salle
+        var result = selectedSalleFilter == 0
+            ? photos.AsEnumerable()
+            : photos.Where(p => p.NoSalle == selectedSalleFilter);
+
+        // Appliquer le tri
+        filteredPhotos = sortOrder switch
         {
-            filteredPhotos = photos;
-        }
-        else
-        {
-            filteredPhotos = photos.Where(p => p.NoSalle == selectedSalleFilter).ToList();
-        }
+            "newest" => result.OrderByDescending(p => p.DateHeure).ToList(),
+            "oldest" => result.OrderBy(p => p.DateHeure).ToList(),
+            "largest" => result.OrderByDescending(p => p.TailleBytes).ToList(),
+            "smallest" => result.OrderBy(p => p.TailleBytes).ToList(),
+            _ => result.OrderByDescending(p => p.DateHeure).ToList()
+        };
     }
+
+    private void SetGridView() => viewMode = "grid";
+    private void SetLargeView() => viewMode = "large";
 
     private void SelectPhoto(PhotoInfo photo)
     {
@@ -238,5 +351,23 @@
     private void CloseModal()
     {
         selectedPhoto = null;
+    }
+
+    private void PreviousPhoto()
+    {
+        if (selectedPhoto == null || filteredPhotos.Count <= 1) return;
+
+        var currentIndex = filteredPhotos.IndexOf(selectedPhoto);
+        var newIndex = currentIndex <= 0 ? filteredPhotos.Count - 1 : currentIndex - 1;
+        selectedPhoto = filteredPhotos[newIndex];
+    }
+
+    private void NextPhoto()
+    {
+        if (selectedPhoto == null || filteredPhotos.Count <= 1) return;
+
+        var currentIndex = filteredPhotos.IndexOf(selectedPhoto);
+        var newIndex = currentIndex >= filteredPhotos.Count - 1 ? 0 : currentIndex + 1;
+        selectedPhoto = filteredPhotos[newIndex];
     }
 }

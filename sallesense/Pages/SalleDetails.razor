@@ -25,9 +25,18 @@
                         <p class="text-muted">Détails et informations de la salle</p>
                     </div>
                     <div>
-                        <span class="badge @(viewModel.Salle.EstDisponible ? "bg-success" : "bg-danger") fs-5">
-                            @(viewModel.Salle.EstDisponible ? "Disponible" : "Occupée")
-                        </span>
+                        @if (viewModel.Salle.EstDisponible)
+                        {
+                            <span class="badge badge-status-available fs-5">
+                                <span class="oi oi-check me-1"></span> Disponible
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-status-occupied fs-5">
+                                <span class="oi oi-ban me-1"></span> Occupée
+                            </span>
+                        }
                     </div>
                 </div>
             </div>
@@ -73,7 +82,7 @@
                         @if (viewModel.ReservationsDuJour.Any())
                         {
                             <div class="table-responsive">
-                                <table class="table table-sm">
+                                <table class="table table-sm table-responsive-cards">
                                     <thead>
                                         <tr>
                                             <th>Date</th>
@@ -91,20 +100,20 @@
                                         @foreach (var reservation in viewModel.ReservationsDuJour)
                                         {
                                             <tr>
-                                                <td>@reservation.HeureDebut.ToString("dd/MM/yyyy")</td>
-                                                <td>@reservation.HeureDebut.ToString("HH:mm")</td>
-                                                <td>@reservation.HeureFin.ToString("HH:mm")</td>
-                                                <td>@reservation.NombrePersonne</td>
-                                                <td>
+                                                <td data-label="Date">@reservation.HeureDebut.ToString("dd/MM/yyyy")</td>
+                                                <td data-label="Début">@reservation.HeureDebut.ToString("HH:mm")</td>
+                                                <td data-label="Fin">@reservation.HeureFin.ToString("HH:mm")</td>
+                                                <td data-label="Personnes">@reservation.NombrePersonne</td>
+                                                <td data-label="Status">
                                                     <span class="badge @(reservation.EstEnCours ? "bg-warning text-dark" : "bg-secondary")">
                                                         @(reservation.EstEnCours ? "En cours" : "À venir")
                                                     </span>
                                                 </td>
                                                 @if (isAdmin)
                                                 {
-                                                    <td>
+                                                    <td data-label="Actions" class="actions-cell">
                                                         <a href="/reservation/modifier/@reservation.IdReservationPk" class="btn btn-sm btn-outline-primary">
-                                                            <span class="oi oi-pencil"></span> Modifier
+                                                            <span class="oi oi-pencil" aria-hidden="true"></span> Modifier
                                                         </a>
                                                     </td>
                                                 }
@@ -116,7 +125,13 @@
                         }
                         else
                         {
-                            <p class="text-muted">Aucune réservation à venir</p>
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <span class="oi oi-calendar"></span>
+                                </div>
+                                <div class="empty-state-title">Aucune réservation à venir</div>
+                                <p class="empty-state-text">Cette salle est libre pour réservation.</p>
+                            </div>
                         }
 
                         <div class="d-grid gap-2 mt-3">
@@ -158,6 +173,43 @@
 
             <!-- Sidebar droite -->
             <div class="col-md-4">
+                <!-- Actions rapides (en premier pour plus de visibilité) -->
+                <div class="quick-actions-card">
+                    <div class="quick-actions-header">
+                        <span class="oi oi-bolt"></span>
+                        <h5>Actions rapides</h5>
+                    </div>
+                    <div class="quick-actions-body">
+                        <a href="/reservation/creer?salleId=@Id" class="quick-action-btn primary">
+                            <div class="quick-action-icon">
+                                <span class="oi oi-plus"></span>
+                            </div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Nouvelle réservation</span>
+                                <span class="quick-action-desc">Réserver cette salle</span>
+                            </div>
+                        </a>
+                        <a href="/salle/@Id/statistiques" class="quick-action-btn secondary">
+                            <div class="quick-action-icon">
+                                <span class="oi oi-graph"></span>
+                            </div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Statistiques</span>
+                                <span class="quick-action-desc">Voir les données</span>
+                            </div>
+                        </a>
+                        <a href="/photos?salle=@Id" class="quick-action-btn info">
+                            <div class="quick-action-icon">
+                                <span class="oi oi-camera-slr"></span>
+                            </div>
+                            <div class="quick-action-content">
+                                <span class="quick-action-title">Photos</span>
+                                <span class="quick-action-desc">Voir les captures</span>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
                 <!-- Photo archive -->
                 <div class="card mb-4">
                     <div class="card-header">
@@ -166,17 +218,19 @@
                     <div class="card-body">
                         @if (viewModel.PhotosArchive.Any())
                         {
-                            <div class="row g-2">
+                            <div class="row g-3">
                                 @foreach (var photo in viewModel.PhotosArchive.Take(6))
                                 {
                                     <div class="col-6">
-                                        <div class="card shadow-sm">
+                                        <div class="card shadow-sm photo-card">
                                             <img src="/api/photo/@photo.IdDonnee"
                                                  class="card-img-top"
-                                                 alt="Photo du @photo.DateHeure.ToString("dd/MM HH:mm")"
-                                                 style="height: 120px; object-fit: cover;">
+                                                 alt="Photo de la salle @viewModel.Salle.Numero capturée le @photo.DateHeure.ToString("dd MMMM yyyy à HH:mm")"
+                                                 loading="lazy"
+                                                 decoding="async"
+                                                 style="height: 100px; object-fit: cover; border-radius: var(--radius) var(--radius) 0 0;">
                                             <div class="card-body p-2 text-center">
-                                                <p class="mb-0 small">@photo.DateHeure.ToString("dd-MM HH:mm")</p>
+                                                <p class="mb-0 text-xs text-muted">@photo.DateHeure.ToString("dd/MM HH:mm")</p>
                                             </div>
                                         </div>
                                     </div>
@@ -184,14 +238,17 @@
                             </div>
                             @if (viewModel.PhotosArchive.Count > 6)
                             {
-                                <a href="/photos" class="btn btn-sm btn-outline-secondary w-100 mt-2">
-                                    Voir toutes (@viewModel.PhotosArchive.Count)
+                                <a href="/photos" class="btn btn-sm btn-outline-primary w-100 mt-3">
+                                    <span class="oi oi-image me-1"></span> Voir toutes (@viewModel.PhotosArchive.Count)
                                 </a>
                             }
                         }
                         else
                         {
-                            <p class="text-muted text-center">Aucune photo disponible</p>
+                            <div class="text-center py-4">
+                                <span class="oi oi-camera-slr text-muted" style="font-size: 2rem;"></span>
+                                <p class="text-muted mt-2 mb-0">Aucune photo disponible</p>
+                            </div>
                         }
                     </div>
                 </div>
@@ -201,57 +258,42 @@
                     <div class="card-header">
                         <h5 class="mb-0">Capteurs actifs</h5>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
                         @if (viewModel.Capteurs.Any())
                         {
-                            <ul class="list-group list-group-flush">
+                            <div class="list-group list-group-flush">
                                 @foreach (var capteur in viewModel.Capteurs)
                                 {
-                                    <li class="list-group-item px-0">
-                                        <div class="d-flex justify-content-between align-items-center">
+                                    <div class="list-group-item py-3">
+                                        <div class="d-flex justify-content-between align-items-start">
                                             <div>
-                                                <strong>@capteur.Nom</strong>
-                                                <br />
+                                                <h6 class="mb-1">@capteur.Nom</h6>
                                                 <small class="text-muted">@capteur.Type</small>
                                             </div>
-                                            <span class="badge @(capteur.EstActif ? "bg-success" : "bg-secondary")">
+                                            <span class="badge @(capteur.EstActif ? "badge-active" : "bg-secondary")">
                                                 @(capteur.EstActif ? "Actif" : "Inactif")
                                             </span>
                                         </div>
                                         @if (capteur.DerniereMesure.HasValue)
                                         {
-                                            <div class="mt-2">
-                                                <small>Dernière mesure: @capteur.DerniereMesure.Value.ToString("F2")</small>
+                                            <div class="mt-2 pt-2 border-top">
+                                                <small class="text-muted">
+                                                    <span class="oi oi-pulse me-1"></span>
+                                                    Dernière mesure: <strong>@capteur.DerniereMesure.Value.ToString("F2")</strong>
+                                                </small>
                                             </div>
                                         }
-                                    </li>
+                                    </div>
                                 }
-                            </ul>
+                            </div>
                         }
                         else
                         {
-                            <p class="text-muted">Aucun capteur configuré</p>
+                            <div class="text-center py-4">
+                                <span class="oi oi-dial text-muted" style="font-size: 2rem;"></span>
+                                <p class="text-muted mt-2 mb-0">Aucun capteur configuré</p>
+                            </div>
                         }
-                    </div>
-                </div>
-
-                <!-- Actions rapides -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Actions rapides</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-grid gap-2">
-                            <a href="/reservation/creer?salleId=@Id" class="btn btn-outline-primary">
-                                <span class="oi oi-plus"></span> Nouvelle réservation
-                            </a>
-                            <button class="btn btn-outline-secondary">
-                                <span class="oi oi-graph"></span> Voir statistiques
-                            </button>
-                            <button class="btn btn-outline-info">
-                                <span class="oi oi-bell"></span> Configurer alertes
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
